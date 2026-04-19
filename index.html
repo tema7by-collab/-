@@ -6,17 +6,21 @@
 <title>WatchWave</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400&display=swap" rel="stylesheet">
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
 <style>
-:root {
+:root{
   --bg:#080b10;--surface:#0e1219;--surface2:#141923;--border:#1e2630;
   --accent:#e63950;--accent2:#ff6b35;--text:#eef0f4;--muted:#5a6478;--chat-bg:#0b0f16;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
 
+/* ── LOBBY ── */
 #lobby{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;}
-.lobby-bg{position:fixed;inset:0;z-index:0;background:radial-gradient(ellipse 80% 60% at 20% 20%,rgba(230,57,80,.12) 0%,transparent 60%),radial-gradient(ellipse 60% 50% at 80% 80%,rgba(255,107,53,.08) 0%,transparent 60%),var(--bg);}
+.lobby-bg{position:fixed;inset:0;z-index:0;background:
+  radial-gradient(ellipse 80% 60% at 20% 20%,rgba(230,57,80,.12) 0%,transparent 60%),
+  radial-gradient(ellipse 60% 50% at 80% 80%,rgba(255,107,53,.08) 0%,transparent 60%),
+  var(--bg);}
 .lobby-content{position:relative;z-index:1;text-align:center;max-width:480px;width:100%;}
 .logo{font-family:'Syne',sans-serif;font-size:clamp(2.4rem,6vw,3.6rem);font-weight:800;letter-spacing:-.02em;line-height:1;margin-bottom:.4rem;}
 .logo span{color:var(--accent);}
@@ -24,17 +28,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem;margin-bottom:1rem;}
 .card h2{font-family:'Syne',sans-serif;font-size:1.1rem;font-weight:700;margin-bottom:1.2rem;}
 .input-group{display:flex;flex-direction:column;gap:.8rem;}
-input[type="text"],input[type="url"]{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:.85rem 1.1rem;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.95rem;outline:none;transition:border-color .2s;width:100%;}
+input[type="text"],input[type="url"]{
+  background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+  padding:.85rem 1.1rem;color:var(--text);font-family:'DM Sans',sans-serif;
+  font-size:.95rem;outline:none;transition:border-color .2s;width:100%;}
 input:focus{border-color:var(--accent);}
 input::placeholder{color:var(--muted);}
-.btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:.85rem 1.5rem;font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;transition:opacity .15s,transform .1s;width:100%;}
-.btn:hover{opacity:.88;transform:translateY(-1px);}
+.btn{
+  background:var(--accent);color:#fff;border:none;border-radius:10px;
+  padding:.85rem 1.5rem;font-family:'Syne',sans-serif;font-weight:700;font-size:.95rem;
+  cursor:pointer;transition:opacity .15s,transform .1s;width:100%;}
+.btn:hover:not(:disabled){opacity:.88;transform:translateY(-1px);}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
 .btn.secondary{background:var(--surface2);border:1px solid var(--border);color:var(--text);}
-.btn.secondary:hover{border-color:var(--accent);color:var(--accent);}
+.btn.secondary:hover:not(:disabled){border-color:var(--accent);color:var(--accent);}
 .divider{display:flex;align-items:center;gap:1rem;color:var(--muted);font-size:.82rem;margin:1.2rem 0;}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
 .info-box{background:rgba(255,107,53,.07);border:1px solid rgba(255,107,53,.2);border-radius:10px;padding:.85rem 1rem;font-size:.82rem;color:#ff9f6b;line-height:1.6;margin-bottom:1rem;text-align:left;}
+.error-banner{background:rgba(230,57,80,.1);border:1px solid rgba(230,57,80,.3);border-radius:10px;padding:.75rem 1rem;font-size:.82rem;color:#ff8096;line-height:1.5;margin-top:.8rem;display:none;}
 
+/* ── ROOM ── */
 #room{display:none;height:100vh;flex-direction:column;}
 .room-topbar{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1rem;gap:.8rem;flex-shrink:0;z-index:10;}
 .logo-sm{font-family:'Syne',sans-serif;font-weight:800;font-size:1.1rem;white-space:nowrap;}
@@ -49,9 +62,10 @@ input::placeholder{color:var(--muted);}
 .dot{width:7px;height:7px;border-radius:50%;background:#22c55e;}
 .room-body{flex:1;display:flex;overflow:hidden;}
 
+/* ── VIDEO ── */
 .video-side{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .video-container{flex:1;background:#000;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
-.video-placeholder{display:flex;flex-direction:column;align-items:center;gap:1rem;color:var(--muted);}
+.video-placeholder{display:flex;flex-direction:column;align-items:center;gap:1rem;color:var(--muted);padding:2rem;text-align:center;}
 .video-placeholder svg{opacity:.3;}
 .video-placeholder p{font-size:.9rem;}
 iframe#player{width:100%;height:100%;border:none;display:none;}
@@ -60,6 +74,7 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
 .url-bar input:focus{border-color:var(--accent);}
 .url-bar input::placeholder{color:var(--muted);}
 
+/* ── CHAT ── */
 .chat-side{width:300px;flex-shrink:0;background:var(--chat-bg);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
 .chat-header{padding:.85rem 1rem;border-bottom:1px solid var(--border);font-family:'Syne',sans-serif;font-size:.88rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;flex-shrink:0;}
 .chat-messages{flex:1;overflow-y:auto;padding:.8rem;display:flex;flex-direction:column;gap:.5rem;scroll-behavior:smooth;}
@@ -68,12 +83,12 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
 .msg{padding:.5rem .75rem;border-radius:10px;font-size:.86rem;line-height:1.45;animation:msgIn .2s ease;}
 @keyframes msgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .msg .msg-name{font-weight:700;font-size:.75rem;margin-bottom:.15rem;font-family:'Syne',sans-serif;}
-.msg .msg-text{color:#c8cdd8;}
+.msg .msg-text{color:#c8cdd8;word-break:break-word;}
 .msg.mine{background:rgba(230,57,80,.13);border:1px solid rgba(230,57,80,.2);align-self:flex-end;max-width:90%;}
 .msg.mine .msg-name{color:var(--accent);}
 .msg.other{background:var(--surface2);border:1px solid var(--border);align-self:flex-start;max-width:90%;}
 .msg.other .msg-name{color:var(--accent2);}
-.msg.system{background:transparent;border:none;text-align:center;color:var(--muted);font-size:.78rem;font-style:italic;align-self:center;}
+.msg.system{background:transparent;border:none;text-align:center;color:var(--muted);font-size:.78rem;font-style:italic;align-self:center;max-width:100%;}
 .chat-input-area{padding:.75rem;border-top:1px solid var(--border);display:flex;gap:.5rem;flex-shrink:0;}
 .chat-input-area input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.55rem .85rem;color:var(--text);font-size:.88rem;font-family:'DM Sans',sans-serif;outline:none;}
 .chat-input-area input:focus{border-color:var(--accent);}
@@ -81,8 +96,9 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
 .send-btn{background:var(--accent);border:none;border-radius:8px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:opacity .15s;}
 .send-btn:hover{opacity:.85;}
 
+/* ── RESPONSIVE ── */
 @media(max-width:700px){
-  .chat-side{width:100%;border-left:none;border-top:1px solid var(--border);height:240px;flex-shrink:0;}
+  .chat-side{width:100%;border-left:none;border-top:1px solid var(--border);height:220px;flex-shrink:0;}
   .room-body{flex-direction:column;}
   .video-side{flex:1;min-height:0;}
   .room-id-badge{max-width:80px;}
@@ -90,22 +106,26 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
   .btn-sm{padding:.3rem .6rem;font-size:.75rem;}
 }
 
+/* ── MODAL ── */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:1rem;opacity:0;pointer-events:none;transition:opacity .2s;}
 .modal-overlay.show{opacity:1;pointer-events:all;}
 .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem;max-width:420px;width:100%;transform:scale(.96);transition:transform .2s;}
 .modal-overlay.show .modal{transform:scale(1);}
 .modal h2{font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:800;margin-bottom:1.2rem;}
 .share-link-box{display:flex;gap:.6rem;}
-.share-link-box input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.55rem .85rem;color:var(--muted);font-size:.75rem;font-family:monospace;outline:none;overflow:hidden;text-overflow:ellipsis;}
+.share-link-box input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.55rem .85rem;color:var(--muted);font-size:.75rem;font-family:monospace;outline:none;min-width:0;}
 
-.toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(20px);background:#22c55e;color:#fff;padding:.6rem 1.4rem;border-radius:8px;font-size:.88rem;font-family:'Syne',sans-serif;font-weight:700;opacity:0;transition:opacity .2s,transform .2s;z-index:200;pointer-events:none;}
+/* ── TOAST ── */
+.toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(20px);background:#22c55e;color:#fff;padding:.6rem 1.4rem;border-radius:8px;font-size:.88rem;font-family:'Syne',sans-serif;font-weight:700;opacity:0;transition:opacity .2s,transform .2s;z-index:200;pointer-events:none;white-space:nowrap;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
-.connecting{position:fixed;inset:0;background:rgba(8,11,16,.93);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;}
+/* ── CONNECTING ── */
+.connecting{position:fixed;inset:0;background:rgba(8,11,16,.95);z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;gap:1rem;}
+.connecting.active{display:flex;}
 .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
-.connecting p{color:var(--muted);font-size:.9rem;}
-.connecting small{color:var(--border);font-size:.75rem;}
+.connecting p{color:var(--muted);font-size:.95rem;}
+.connecting small{color:var(--border);font-size:.8rem;}
 </style>
 </head>
 <body>
@@ -118,17 +138,20 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
     <div class="tagline">Смотрите вместе — без серверов</div>
 
     <div class="info-box">
-      ⚡ P2P через BitTorrent-трекеры — никаких серверов вообще. Комнаты живут пока открыты вкладки.
+      ⚡ P2P через WebRTC — данные идут напрямую между браузерами.<br>
+      Комнаты живут пока хост держит вкладку открытой.
     </div>
 
     <div class="card">
       <h2>Как тебя зовут?</h2>
-      <input type="text" id="nameInput" placeholder="Твой никнейм..." maxlength="24" autocomplete="off">
+      <input type="text" id="nameInput" placeholder="Твой никнейм..." maxlength="24" autocomplete="off"
+        onkeydown="if(event.key==='Enter') document.getElementById('createBtn').click()">
     </div>
 
     <div class="card">
       <h2>🎬 Создать комнату</h2>
-      <button class="btn" onclick="createRoom()">Создать и стать хостом</button>
+      <button class="btn" id="createBtn" onclick="createRoom()">Создать и стать хостом</button>
+      <div class="error-banner" id="createError"></div>
     </div>
 
     <div class="divider">или</div>
@@ -136,9 +159,11 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
     <div class="card">
       <h2>Войти в комнату</h2>
       <div class="input-group">
-        <input type="text" id="roomCodeInput" placeholder="Код комнаты..." maxlength="40" autocomplete="off">
-        <button class="btn secondary" onclick="joinRoom()">Войти →</button>
+        <input type="text" id="roomCodeInput" placeholder="Код комнаты..." maxlength="40" autocomplete="off"
+          onkeydown="if(event.key==='Enter') joinRoom()">
+        <button class="btn secondary" id="joinBtn" onclick="joinRoom()">Войти →</button>
       </div>
+      <div class="error-banner" id="joinError"></div>
     </div>
   </div>
 </div>
@@ -158,14 +183,17 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
     <div class="video-side">
       <div class="video-container">
         <div class="video-placeholder" id="videoPlaceholder">
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
           <p>Вставьте ссылку на видео ниже</p>
-          <p style="font-size:.78rem;margin-top:-.4rem">YouTube, Rutube, VK Video...</p>
+          <p style="font-size:.78rem;opacity:.6">YouTube, Rutube, VK Video...</p>
         </div>
-        <iframe id="player" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+        <iframe id="player" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
       </div>
       <div class="url-bar">
-        <input type="url" id="videoUrlInput" placeholder="Ссылка YouTube / Rutube / VK...">
+        <input type="url" id="videoUrlInput" placeholder="Ссылка YouTube / Rutube / VK..."
+          onkeydown="if(event.key==='Enter') setVideo()">
         <button class="btn-sm accent" onclick="setVideo()">▶ Загрузить</button>
       </div>
     </div>
@@ -174,8 +202,11 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
       <div class="chat-messages" id="chatMessages"></div>
       <div class="chat-input-area">
         <input type="text" id="chatInput" placeholder="Написать..." maxlength="300" autocomplete="off">
-        <button class="send-btn" onclick="sendMessage()">
-          <svg width="16" height="16" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13" stroke="white" stroke-width="2"/><polygon points="22 2 15 22 11 13 2 9 22 2" fill="white"/></svg>
+        <button class="send-btn" onclick="sendMessage()" title="Отправить">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <line x1="22" y1="2" x2="11" y2="13" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2" fill="white"/>
+          </svg>
         </button>
       </div>
     </div>
@@ -183,272 +214,537 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
 </div>
 
 <!-- Share Modal -->
-<div class="modal-overlay" id="shareModal" onclick="hideShareModal(event)">
+<div class="modal-overlay" id="shareModal" onclick="if(event.target===this) hideShareModal()">
   <div class="modal">
     <h2>🔗 Пригласить друзей</h2>
-    <p style="color:var(--muted);font-size:.88rem;margin-bottom:1rem;">Отправь эту ссылку другу</p>
+    <p style="color:var(--muted);font-size:.88rem;margin-bottom:1rem;">Отправь эту ссылку другу — он войдёт автоматически</p>
     <div class="share-link-box">
       <input type="text" id="shareLinkInput" readonly>
       <button class="btn-sm accent" onclick="copyLink()">Копировать</button>
     </div>
-    <p style="margin-top:.8rem;color:var(--muted);font-size:.78rem;">Код комнаты: <strong id="shareCode" style="color:var(--text);font-family:monospace;"></strong></p>
-    <p style="margin-top:.4rem;color:var(--muted);font-size:.78rem;">⚠️ Ты (хост) должен быть онлайн</p>
+    <p style="margin-top:.8rem;color:var(--muted);font-size:.78rem;">
+      Код комнаты: <strong id="shareCode" style="color:var(--text);font-family:monospace;letter-spacing:.05em;"></strong>
+    </p>
+    <p style="margin-top:.4rem;color:var(--muted);font-size:.78rem;">
+      ⚠️ Комната живёт пока ты (хост) онлайн
+    </p>
+    <button class="btn secondary" style="margin-top:1.2rem" onclick="hideShareModal()">Закрыть</button>
   </div>
 </div>
 
-<!-- Connecting -->
-<div class="connecting" id="connectingOverlay" style="display:none">
+<!-- Connecting overlay -->
+<div class="connecting" id="connectingOverlay">
   <div class="spinner"></div>
   <p id="connectingMsg">Подключение...</p>
-  <small id="connectingDetail">Это может занять до 15 секунд</small>
+  <small id="connectingDetail">Может занять несколько секунд</small>
 </div>
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<!-- Trystero via torrent (no servers at all) -->
-<script type="module">
-// Trystero — P2P через публичные BitTorrent-трекеры, без серверов
-import { joinRoom as trysteroJoin } from 'https://cdn.jsdelivr.net/npm/trystero@0.21.0/torrent/index.js';
+<script>
+'use strict';
 
-// ── CONFIG ────────────────────────────────────────
-const APP_ID = 'watchwave-v1'; // уникальный ID приложения
-
+// ── СОСТОЯНИЕ ─────────────────────────────────────
+let peer = null;
+let connections = [];  // только для хоста
+let hostConn = null;   // только для гостя
 let myName = '';
 let myId = '';
 let isHost = false;
 let currentVideo = '';
-let room = null;
-let userNames = {}; // peerId -> name
-let peerCount = 0;
+let userNames = {};    // peerId → name (для хоста)
+let busy = false;      // защита от двойных кликов
 
-// ── UTILS ─────────────────────────────────────────
-function genId() { return Math.random().toString(36).substr(2,8).toUpperCase(); }
+// ── СЕРВЕРЫ ───────────────────────────────────────
+// Пробуем по очереди. Дефолтный (без хоста) = 0.peerjs.com
+const PEER_SERVERS = [
+  null,                                                      // дефолтный 0.peerjs.com
+  { host: 'peerjs.fly.dev', port: 443, path: '/', secure: true },
+];
 
+// ── УТИЛИТЫ ───────────────────────────────────────
+function genId() {
+  // Только буквы и цифры — совместимо со всеми PeerJS серверами
+  return Math.random().toString(36).substr(2, 9).toUpperCase();
+}
+
+let toastTimer = null;
 function showToast(msg, color) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.style.background = color || '#22c55e';
-  t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3500);
+  t.textContent = msg;
+  t.style.background = color || '#22c55e';
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
 }
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function showConnecting(msg) {
-  document.getElementById('connectingOverlay').style.display = 'flex';
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function showConnecting(msg, detail) {
   document.getElementById('connectingMsg').textContent = msg || 'Подключение...';
+  document.getElementById('connectingDetail').textContent = detail || 'Может занять несколько секунд';
+  document.getElementById('connectingOverlay').classList.add('active');
 }
 function hideConnecting() {
-  document.getElementById('connectingOverlay').style.display = 'none';
+  document.getElementById('connectingOverlay').classList.remove('active');
 }
 
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+function hideErr(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+function setBusy(state) {
+  busy = state;
+  document.getElementById('createBtn').disabled = state;
+  document.getElementById('joinBtn').disabled = state;
+}
+
+// ── EMBED URL ─────────────────────────────────────
 function toEmbedUrl(url) {
   try {
     const u = new URL(url);
-    if(u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
+    // YouTube
+    if (u.hostname.includes('youtube.com') || u.hostname.includes('youtu.be')) {
       let v = u.searchParams.get('v');
-      if(!v && u.hostname === 'youtu.be') v = u.pathname.slice(1).split('?')[0];
-      if(v) return `https://www.youtube.com/embed/${v}?autoplay=1&rel=0`;
+      if (!v && u.hostname === 'youtu.be') v = u.pathname.slice(1).split('?')[0];
+      if (v) return `https://www.youtube.com/embed/${v}?autoplay=1&rel=0&playsinline=1`;
     }
-    if(u.hostname.includes('rutube.ru')) {
-      const m = u.pathname.match(/video\/([a-f0-9]+)/);
-      if(m) return `https://rutube.ru/play/embed/${m[1]}/`;
+    // Rutube
+    if (u.hostname.includes('rutube.ru')) {
+      const m = u.pathname.match(/video\/([a-f0-9]+)/i);
+      if (m) return `https://rutube.ru/play/embed/${m[1]}/`;
     }
-    if(u.hostname.includes('vk.com')) {
+    // VK Video
+    if (u.hostname.includes('vk.com') || u.hostname.includes('vkvideo.ru')) {
       const m = u.pathname.match(/video(-?\d+_\d+)/);
-      if(m) { const p=m[1].split('_'); return `https://vk.com/video_ext.php?oid=${p[0]}&id=${p[1]}&hd=2&autoplay=1`; }
+      if (m) {
+        const [oid, id] = m[1].split('_');
+        return `https://vk.com/video_ext.php?oid=${oid}&id=${id}&hd=2&autoplay=1`;
+      }
     }
-    if(url.includes('embed') || url.includes('player')) return url;
+    // Уже embed-ссылка
+    if (url.includes('/embed') || url.includes('/player')) return url;
     return null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
-function loadVideoFrame(embed) {
+// ── ВИДЕО ─────────────────────────────────────────
+function loadVideoFrame(url) {
+  if (!url) return;
   const ifr = document.getElementById('player');
-  ifr.src = embed; ifr.style.display = 'block';
+  ifr.src = url;
+  ifr.style.display = 'block';
   document.getElementById('videoPlaceholder').style.display = 'none';
-  currentVideo = embed;
+  currentVideo = url;
 }
 
+// ── ЧАТ ───────────────────────────────────────────
 function renderMsg(data) {
   const box = document.getElementById('chatMessages');
   const div = document.createElement('div');
-  if(data.type === 'system') {
-    div.className = 'msg system'; div.textContent = data.text;
+  if (data.type === 'system') {
+    div.className = 'msg system';
+    div.textContent = data.text;
   } else {
-    div.className = `msg ${data.uid === myId ? 'mine' : 'other'}`;
+    const isMine = data.uid === myId;
+    div.className = `msg ${isMine ? 'mine' : 'other'}`;
     div.innerHTML = `<div class="msg-name">${esc(data.name)}</div><div class="msg-text">${esc(data.text)}</div>`;
   }
-  box.appendChild(div); box.scrollTop = box.scrollHeight;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
 }
 
-function updateCount(n) {
-  peerCount = n;
-  document.getElementById('usersCount').textContent = n + 1; // +1 себя
+// ── PEER COUNT ────────────────────────────────────
+function updateCount() {
+  let n;
+  if (isHost) {
+    n = 1 + connections.filter(c => c.open).length;
+  } else {
+    // Считаем уникальные имена + себя
+    n = Object.keys(userNames).length + 1;
+  }
+  document.getElementById('usersCount').textContent = Math.max(1, n);
 }
 
+// ── BROADCAST (хост → все гости) ─────────────────
+function broadcast(data, except) {
+  connections.forEach(c => {
+    if (c !== except && c.open) {
+      try { c.send(data); } catch(e) { console.warn('broadcast error', e); }
+    }
+  });
+}
+
+// ── ENTER ROOM UI ─────────────────────────────────
 function enterRoomUI(roomId) {
   document.getElementById('lobby').style.display = 'none';
   document.getElementById('room').style.display = 'flex';
   document.getElementById('roomIdBadge').textContent = roomId;
   document.getElementById('shareCode').textContent = roomId;
-  const url = `${location.origin}${location.pathname}?r=${roomId}`;
-  document.getElementById('shareLinkInput').value = url;
-  document.getElementById('usersCount').textContent = 1;
+  const link = `${location.origin}${location.pathname}?r=${encodeURIComponent(roomId)}`;
+  document.getElementById('shareLinkInput').value = link;
+  updateCount();
 }
 
-// ── JOIN ROOM (trystero) ───────────────────────────
-function setupRoom(roomId) {
-  // trystero автоматически находит пиров через BitTorrent-трекеры
-  room = trysteroJoin({ appId: APP_ID }, roomId);
+// ── СОЗДАТЬ PEER с fallback ───────────────────────
+function tryCreatePeer(id, serverIndex) {
+  return new Promise((resolve, reject) => {
+    const cfg = PEER_SERVERS[serverIndex];
+    const label = cfg ? cfg.host : '0.peerjs.com';
+    showConnecting('Подключение...', `Сервер ${serverIndex + 1}/${PEER_SERVERS.length}: ${label}`);
 
-  // Создаём каналы передачи данных
-  const [sendChat, onChat] = room.makeAction('chat');
-  const [sendVideo, onVideo] = room.makeAction('video');
-  const [sendName, onName] = room.makeAction('name');
-  const [sendState, onState] = room.makeAction('state'); // хост отдаёт состояние новым
-
-  // Сохраняем функции отправки глобально
-  window._send = { sendChat, sendVideo, sendName, sendState };
-
-  // Когда кто-то подключился
-  room.onPeerJoin(peerId => {
-    peerCount++;
-    document.getElementById('usersCount').textContent = peerCount + 1;
-    // Представляемся
-    sendName({ uid: myId, name: myName }, peerId);
-    // Если мы хост — отдаём текущее состояние
-    if(isHost && currentVideo) {
-      sendState({ video: currentVideo }, peerId);
+    let p;
+    try {
+      if (cfg === null) {
+        p = new Peer(id);
+      } else {
+        p = new Peer(id, { ...cfg, debug: 0 });
+      }
+    } catch(e) {
+      return reject(e);
     }
-    renderMsg({ type:'system', text:'Кто-то вошёл в комнату' });
-  });
 
-  // Когда кто-то ушёл
-  room.onPeerLeave(peerId => {
-    peerCount = Math.max(0, peerCount - 1);
-    document.getElementById('usersCount').textContent = peerCount + 1;
-    const who = userNames[peerId] || 'Кто-то';
-    delete userNames[peerId];
-    renderMsg({ type:'system', text:`${who} покинул комнату` });
-  });
+    const timer = setTimeout(() => {
+      p.destroy();
+      reject(new Error('timeout'));
+    }, 7000);
 
-  // Получаем имена
-  onName(({ uid, name }, peerId) => {
-    userNames[peerId] = name;
-  });
+    p.on('open', () => {
+      clearTimeout(timer);
+      resolve(p);
+    });
 
-  // Получаем чат
-  onChat((data) => {
-    renderMsg(data);
+    p.on('error', e => {
+      clearTimeout(timer);
+      // peer-unavailable — это не проблема сервера, не нужно переключаться
+      if (e.type === 'peer-unavailable') {
+        reject(Object.assign(new Error('peer-unavailable'), { peerError: true }));
+        return;
+      }
+      p.destroy();
+      reject(new Error(e.type));
+    });
   });
+}
 
-  // Получаем видео
-  onVideo(({ url, senderName }) => {
-    loadVideoFrame(url);
-    renderMsg({ type:'system', text:`${senderName} поставил новое видео` });
-  });
-
-  // Получаем состояние (для новых участников от хоста)
-  onState(({ video }) => {
-    if(video && !currentVideo) loadVideoFrame(video);
-  });
+async function makePeer(id) {
+  let lastErr = null;
+  for (let i = 0; i < PEER_SERVERS.length; i++) {
+    try {
+      const p = await tryCreatePeer(id, i);
+      return p;
+    } catch(e) {
+      if (e.peerError) throw e; // пробрасываем peer-unavailable напрямую
+      lastErr = e;
+      console.warn(`Server ${i} failed:`, e.message);
+    }
+  }
+  throw new Error('Все серверы недоступны. Проверь интернет.');
 }
 
 // ── CREATE ROOM ───────────────────────────────────
-window.createRoom = function() {
+window.createRoom = async function() {
+  if (busy) return;
   const name = document.getElementById('nameInput').value.trim();
-  if(!name) { showToast('Введи имя!', 'var(--accent)'); return; }
+  if (!name) { showToast('Введи имя!', 'var(--accent)'); return; }
 
+  hideErr('createError');
+  hideErr('joinError');
   myName = name;
   myId = genId();
   isHost = true;
-
-  const roomId = genId();
-  showConnecting('Создаём комнату...');
+  setBusy(true);
 
   try {
-    setupRoom(roomId);
-    hideConnecting();
-    enterRoomUI(roomId);
-    renderMsg({ type:'system', text:'Комната создана. Ты — хост!' });
+    peer = await makePeer(myId);
   } catch(e) {
     hideConnecting();
-    showToast('Ошибка: ' + e.message, 'var(--accent)');
+    setBusy(false);
+    showErr('createError', '❌ ' + e.message);
+    return;
   }
+
+  hideConnecting();
+  setBusy(false);
+  enterRoomUI(myId);
+  renderMsg({ type: 'system', text: '🎬 Комната создана! Ты — хост. Поделись кодом.' });
+
+  // Слушаем входящие подключения
+  peer.on('connection', conn => {
+    conn.on('open', () => {
+      connections.push(conn);
+      // Отправляем новому гостю текущее состояние
+      conn.send({
+        type: 'init',
+        video: currentVideo,
+        names: userNames,
+        hostName: myName,
+        hostId: myId,
+      });
+      updateCount();
+    });
+
+    conn.on('data', data => hostReceive(data, conn));
+
+    conn.on('close', () => {
+      connections = connections.filter(c => c !== conn);
+      const who = userNames[conn.peer] || 'Кто-то';
+      delete userNames[conn.peer];
+      updateCount();
+      const msg = { type: 'system', text: `${who} покинул комнату` };
+      renderMsg(msg);
+      broadcast(msg, conn);
+    });
+
+    conn.on('error', e => {
+      console.warn('conn error', e);
+    });
+  });
+
+  peer.on('error', e => {
+    // peer-unavailable — нормально если кто-то пытается подключиться с неверным кодом
+    if (e.type !== 'peer-unavailable') {
+      console.warn('peer error after open:', e.type);
+    }
+  });
 };
+
+function hostReceive(data, fromConn) {
+  if (data.type === 'join') {
+    userNames[fromConn.peer] = data.name;
+    const msg = { type: 'system', text: `${data.name} вошёл в комнату 👋` };
+    renderMsg(msg);
+    broadcast(msg, fromConn);
+    // Рассылаем обновлённый список имён всем
+    const namesPayload = { type: 'names', names: userNames, hostName: myName, hostId: myId };
+    broadcast(namesPayload, fromConn);
+    fromConn.send(namesPayload);
+    updateCount();
+  }
+  if (data.type === 'chat') {
+    renderMsg(data);
+    broadcast(data, fromConn);
+  }
+  if (data.type === 'video') {
+    loadVideoFrame(data.url);
+    broadcast(data, fromConn);
+    const msg = { type: 'system', text: `${data.name} поставил новое видео` };
+    renderMsg(msg);
+    broadcast(msg, fromConn);
+  }
+}
 
 // ── JOIN ROOM ─────────────────────────────────────
-window.joinRoom = function() {
+window.joinRoom = async function() {
+  if (busy) return;
   const name = document.getElementById('nameInput').value.trim();
   const code = document.getElementById('roomCodeInput').value.trim().toUpperCase();
-  if(!name) { showToast('Введи имя!', 'var(--accent)'); return; }
-  if(!code) { showToast('Введи код!', 'var(--accent)'); return; }
+  if (!name) { showToast('Введи имя!', 'var(--accent)'); return; }
+  if (!code) { showToast('Введи код комнаты!', 'var(--accent)'); return; }
 
+  hideErr('joinError');
+  hideErr('createError');
   myName = name;
-  myId = genId() + 'G';
+  myId = genId();
   isHost = false;
+  setBusy(true);
 
-  showConnecting('Ищем комнату...');
-
+  // Шаг 1 — подключаемся к сигнальному серверу
   try {
-    setupRoom(code);
-    hideConnecting();
-    enterRoomUI(code);
-    renderMsg({ type:'system', text:'Подключён! Ожидаем других участников...' });
-    showToast('Вошёл в комнату! Дождись хоста.', '#22c55e');
+    peer = await makePeer(myId);
   } catch(e) {
     hideConnecting();
-    showToast('Ошибка: ' + e.message, 'var(--accent)');
+    setBusy(false);
+    showErr('joinError', '❌ ' + e.message);
+    return;
+  }
+
+  // Шаг 2 — подключаемся к хосту
+  showConnecting('Ищем хоста...', 'Код: ' + code);
+
+  let connected = false;
+  hostConn = peer.connect(code, { reliable: true, serialization: 'json' });
+
+  const joinTimer = setTimeout(() => {
+    if (!connected) {
+      hideConnecting();
+      setBusy(false);
+      showErr('joinError', '❌ Хост не отвечает. Проверь код или попроси хоста обновить страницу.');
+      peer.destroy();
+      peer = null;
+    }
+  }, 12000);
+
+  hostConn.on('open', () => {
+    connected = true;
+    clearTimeout(joinTimer);
+    hideConnecting();
+    setBusy(false);
+    hostConn.send({ type: 'join', name: myName, uid: myId });
+    enterRoomUI(code);
+    renderMsg({ type: 'system', text: '✅ Подключён к комнате!' });
+  });
+
+  hostConn.on('data', data => guestReceive(data));
+
+  hostConn.on('close', () => {
+    if (connected) {
+      renderMsg({ type: 'system', text: '⚠️ Хост отключился.' });
+    }
+  });
+
+  hostConn.on('error', e => {
+    if (!connected) {
+      clearTimeout(joinTimer);
+      hideConnecting();
+      setBusy(false);
+      showErr('joinError', '❌ Ошибка подключения: ' + e.type);
+    }
+  });
+
+  peer.on('error', e => {
+    if (!connected) {
+      clearTimeout(joinTimer);
+      hideConnecting();
+      setBusy(false);
+      const msg = e.type === 'peer-unavailable'
+        ? 'Хост не найден. Проверь код — он должен точно совпадать.'
+        : 'Ошибка: ' + e.type;
+      showErr('joinError', '❌ ' + msg);
+      peer.destroy();
+      peer = null;
+    }
+  });
+};
+
+function guestReceive(data) {
+  if (data.type === 'init') {
+    if (data.video) loadVideoFrame(data.video);
+    userNames = data.names || {};
+    updateCount();
+  }
+  if (data.type === 'names') {
+    userNames = data.names || {};
+    updateCount();
+  }
+  if (data.type === 'chat') renderMsg(data);
+  if (data.type === 'system') renderMsg(data);
+  if (data.type === 'video') loadVideoFrame(data.url);
+}
+
+// ── CHAT ──────────────────────────────────────────
+window.sendMessage = function() {
+  const inp = document.getElementById('chatInput');
+  const text = inp.value.trim();
+  if (!text) return;
+  inp.value = '';
+  const data = { type: 'chat', uid: myId, name: myName, text };
+  renderMsg(data);
+  if (isHost) {
+    broadcast(data);
+  } else if (hostConn && hostConn.open) {
+    hostConn.send(data);
   }
 };
 
-// ── SEND CHAT ──────────────────────────────────────
-window.sendMessage = function() {
-  const inp = document.getElementById('chatInput');
-  const text = inp.value.trim(); if(!text) return;
-  inp.value = '';
-  const data = { type:'chat', uid:myId, name:myName, text };
-  renderMsg(data);
-  if(window._send) window._send.sendChat(data);
-};
-document.getElementById('chatInput').addEventListener('keydown', e => { if(e.key === 'Enter') window.sendMessage(); });
+document.getElementById('chatInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    window.sendMessage();
+  }
+});
 
-// ── SET VIDEO ──────────────────────────────────────
+// ── VIDEO ──────────────────────────────────────────
 window.setVideo = function() {
-  const url = document.getElementById('videoUrlInput').value.trim(); if(!url) return;
-  const embed = toEmbedUrl(url);
-  if(!embed) { showToast('Не распознал ссылку', 'var(--accent)'); return; }
+  const rawUrl = document.getElementById('videoUrlInput').value.trim();
+  if (!rawUrl) return;
+  const embed = toEmbedUrl(rawUrl);
+  if (!embed) {
+    showToast('Не распознал ссылку. Поддерживаются YouTube, Rutube, VK.', 'var(--accent)');
+    return;
+  }
   loadVideoFrame(embed);
-  renderMsg({ type:'system', text:`${myName} поставил новое видео` });
-  if(window._send) window._send.sendVideo({ url: embed, senderName: myName });
+  const data = { type: 'video', url: embed, name: myName };
+  if (isHost) {
+    broadcast(data);
+    renderMsg({ type: 'system', text: `${myName} поставил новое видео` });
+  } else if (hostConn && hostConn.open) {
+    hostConn.send(data);
+  }
+  document.getElementById('videoUrlInput').value = '';
 };
 
 // ── LEAVE ──────────────────────────────────────────
 window.leaveRoom = function() {
-  if(room) room.leave();
-  room = null; window._send = null; isHost = false; currentVideo = ''; userNames = {}; peerCount = 0;
+  if (peer) { try { peer.destroy(); } catch(e) {} }
+  peer = null;
+  connections = [];
+  hostConn = null;
+  isHost = false;
+  currentVideo = '';
+  userNames = {};
+  busy = false;
+
+  // Сброс UI комнаты
   document.getElementById('room').style.display = 'none';
   document.getElementById('lobby').style.display = 'flex';
-  document.getElementById('player').src = '';
+  document.getElementById('player').src = 'about:blank';
   document.getElementById('player').style.display = 'none';
   document.getElementById('videoPlaceholder').style.display = 'flex';
   document.getElementById('chatMessages').innerHTML = '';
+  document.getElementById('videoUrlInput').value = '';
+
+  // Сброс ошибок и кнопок
+  hideErr('createError');
+  hideErr('joinError');
+  setBusy(false);
 };
 
 // ── SHARE ──────────────────────────────────────────
-window.showShareModal = function() { document.getElementById('shareModal').classList.add('show'); };
-window.hideShareModal = function(e) { if(e.target.id === 'shareModal') document.getElementById('shareModal').classList.remove('show'); };
+window.showShareModal = function() {
+  document.getElementById('shareModal').classList.add('show');
+};
+window.hideShareModal = function() {
+  document.getElementById('shareModal').classList.remove('show');
+};
 window.copyLink = function() {
-  navigator.clipboard.writeText(document.getElementById('shareLinkInput').value)
-    .then(() => showToast('Ссылка скопирована!'));
+  const val = document.getElementById('shareLinkInput').value;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(val).then(() => showToast('Ссылка скопирована! 🔗'));
+  } else {
+    // fallback для старых браузеров
+    const inp = document.getElementById('shareLinkInput');
+    inp.select();
+    document.execCommand('copy');
+    showToast('Ссылка скопирована! 🔗');
+  }
 };
 
 // ── URL PARAM ──────────────────────────────────────
 (function() {
-  const r = new URLSearchParams(location.search).get('r');
-  if(r) {
-    document.getElementById('roomCodeInput').value = r;
-    showToast('Комната найдена — введи имя и войди!');
-  }
+  try {
+    const r = new URLSearchParams(location.search).get('r');
+    if (r) {
+      document.getElementById('roomCodeInput').value = decodeURIComponent(r).toUpperCase();
+      showToast('Введи имя и нажми "Войти" 👇');
+      // Фокус на поле имени
+      setTimeout(() => document.getElementById('nameInput').focus(), 300);
+    }
+  } catch(e) {}
 })();
 </script>
 </body>
