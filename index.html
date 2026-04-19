@@ -7,6 +7,68 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script>
+// ── ADBLOCK ─────────────────────────────────────────
+(function() {
+  const AD_PATTERNS = [
+    /doubleclick\.net/i, /googlesyndication\.com/i, /googleadservices\.com/i,
+    /adservice\.google\./i, /pagead2\.googlesyndication/i, /adnxs\.com/i,
+    /ads\.youtube\.com/i, /partner\.googleadservices/i, /amazon-adsystem\.com/i,
+    /adsystem\.amazon/i, /moatads\.com/i, /taboola\.com/i, /outbrain\.com/i,
+    /criteo\.com/i, /rubiconproject\.com/i, /openx\.net/i, /pubmatic\.com/i,
+    /yandex\.ru\/an\//i, /mc\.yandex\.ru/i, /advertising\.yandex/i,
+    /vk\.com\/adman/i, /rutube\.ru\/ads/i, /yadro\.ru/i,
+    /\.ads\./i, /\/ads\//i, /\/advert/i, /\/banner/i,
+    /tracking\./i, /tracker\./i, /analytics\./i, /pixel\./i,
+    /telemetry\./i, /collect\./i, /counter\./i,
+  ];
+  function isAd(url) {
+    if (!url) return false;
+    return AD_PATTERNS.some(p => p.test(url));
+  }
+  // Перехватываем fetch
+  const origFetch = window.fetch;
+  window.fetch = function(input, ...args) {
+    const url = typeof input === 'string' ? input : (input && input.url);
+    if (isAd(url)) {
+      console.debug('[AdBlock] Заблокировано:', url);
+      return Promise.reject(new TypeError('AdBlock: blocked'));
+    }
+    return origFetch.apply(this, [input, ...args]);
+  };
+  // Перехватываем XHR
+  const origOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    if (isAd(url)) {
+      console.debug('[AdBlock] XHR заблокирован:', url);
+      this._adblocked = true;
+    }
+    return origOpen.apply(this, [method, url, ...rest]);
+  };
+  const origSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function(...args) {
+    if (this._adblocked) return;
+    return origSend.apply(this, args);
+  };
+  // Блокируем рекламные скрипты через MutationObserver
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(m => {
+      m.addedNodes.forEach(node => {
+        if (node.tagName === 'SCRIPT' && isAd(node.src)) {
+          node.remove();
+          console.debug('[AdBlock] Script заблокирован:', node.src);
+        }
+        if (node.tagName === 'IMG' && isAd(node.src)) {
+          node.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+        }
+      });
+    });
+  });
+  document.addEventListener('DOMContentLoaded', () => {
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+})();
+</script>
 <style>
 :root{
   --bg:#080b10;--surface:#0e1219;--surface2:#141923;--border:#1e2630;
@@ -126,6 +188,27 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
 @keyframes spin{to{transform:rotate(360deg)}}
 .connecting p{color:var(--muted);font-size:.95rem;}
 .connecting small{color:var(--border);font-size:.8rem;}
+
+/* ── REACTIONS ── */
+.reactions-bar{display:flex;gap:.4rem;padding:.4rem .8rem;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;}
+.react-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.3rem .55rem;font-size:1.1rem;cursor:pointer;transition:transform .1s,border-color .2s;line-height:1;}
+.react-btn:hover{transform:scale(1.2);border-color:var(--accent);}
+.reaction-fly{position:fixed;font-size:1.8rem;pointer-events:none;z-index:999;animation:flyUp 2.5s ease-out forwards;}
+@keyframes flyUp{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-180px) scale(1.4)}}
+
+/* ── BUFFER / SYNC INDICATORS ── */
+.buffer-overlay{position:absolute;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;flex-direction:column;gap:.6rem;z-index:5;}
+.buffer-overlay.active{display:flex;}
+.buffer-spinner{width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+.buffer-text{color:#fff;font-size:.85rem;font-family:'Syne',sans-serif;}
+.sync-badge{position:absolute;top:.6rem;right:.6rem;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);border-radius:6px;padding:.25rem .6rem;font-size:.72rem;color:#22c55e;font-family:'Syne',sans-serif;font-weight:700;z-index:6;transition:all .3s;}
+.sync-badge.syncing{background:rgba(255,165,0,.15);border-color:rgba(255,165,0,.3);color:orange;}
+.sync-badge.buffering{background:rgba(230,57,80,.15);border-color:rgba(230,57,80,.3);color:var(--accent);}
+.buffers-list{font-size:.75rem;color:var(--muted);padding:.3rem .8rem;text-align:center;min-height:1.4rem;background:var(--surface);border-top:1px solid var(--border);}
+
+/* ── ADBLOCK BADGE ── */
+.adblock-badge{display:flex;align-items:center;gap:.35rem;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:.25rem .6rem;font-size:.72rem;color:#22c55e;font-family:'Syne',sans-serif;font-weight:700;white-space:nowrap;}
+.adblock-badge span{background:#22c55e;color:#000;border-radius:4px;padding:.05rem .35rem;font-size:.68rem;}
 </style>
 </head>
 <body>
@@ -139,7 +222,8 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
 
     <div class="info-box">
       ⚡ P2P через WebRTC — данные идут напрямую между браузерами.<br>
-      Комнаты живут пока хост держит вкладку открытой.
+      Комнаты живут пока хост держит вкладку открытой.<br>
+      🛡 AdBlock активен · 🔄 Синхронизация YouTube · 🎉 Реакции в эфире
     </div>
 
     <div class="card">
@@ -175,6 +259,7 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
     <div class="room-id-badge" id="roomIdBadge">—</div>
     <div class="topbar-right">
       <div class="users-count"><div class="dot"></div><span id="usersCount">1</span></div>
+      <div class="adblock-badge" title="AdBlock активен">🛡 AdBlock <span id="adBlockCount">0</span></div>
       <button class="btn-sm accent" onclick="showShareModal()">🔗 Поделиться</button>
       <button class="btn-sm" onclick="leaveRoom()">Выйти</button>
     </div>
@@ -190,6 +275,23 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
           <p style="font-size:.78rem;opacity:.6">YouTube, Rutube, VK Video...</p>
         </div>
         <iframe id="player" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+        <div class="buffer-overlay" id="bufferOverlay">
+          <div class="buffer-spinner"></div>
+          <div class="buffer-text">Буферизация...</div>
+        </div>
+        <div class="sync-badge" id="syncBadge">🔴 В эфире</div>
+      </div>
+      <div class="buffers-list" id="buffersList"></div>
+      <div class="reactions-bar" id="reactionsBar">
+        <span style="font-size:.75rem;color:var(--muted);align-self:center;margin-right:.2rem;">Реакции:</span>
+        <button class="react-btn" onclick="sendReaction('👍')">👍</button>
+        <button class="react-btn" onclick="sendReaction('😂')">😂</button>
+        <button class="react-btn" onclick="sendReaction('😱')">😱</button>
+        <button class="react-btn" onclick="sendReaction('❤️')">❤️</button>
+        <button class="react-btn" onclick="sendReaction('🔥')">🔥</button>
+        <button class="react-btn" onclick="sendReaction('💀')">💀</button>
+        <button class="react-btn" onclick="sendReaction('🎉')">🎉</button>
+        <button class="react-btn" onclick="sendReaction('😴')">😴</button>
       </div>
       <div class="url-bar">
         <input type="url" id="videoUrlInput" placeholder="Ссылка YouTube / Rutube / VK..."
@@ -255,6 +357,34 @@ let isHost = false;
 let currentVideo = '';
 let userNames = {};    // peerId → name (для хоста)
 let busy = false;      // защита от двойных кликов
+
+// ── SYNC STATE ────────────────────────────────────
+let ytPlayer = null;          // YouTube IFrame API player
+let ytReady = false;
+let syncInterval = null;
+let lastSyncTime = 0;
+let ignoreStateChange = false;
+let isBuffering = false;
+let guestBuffers = {};        // peerId → {name, buffering}
+let adBlockCount = 0;
+
+// Обновляем счётчик адблока
+function incAdBlock() {
+  adBlockCount++;
+  const el = document.getElementById('adBlockCount');
+  if (el) el.textContent = adBlockCount;
+}
+// Патчим fetch чтобы считать заблокированные
+(function() {
+  const orig = window.fetch;
+  window.fetch = function(input, ...args) {
+    // Счётчик уже вешается внутри первого скрипта, здесь просто слушаем
+    return orig.apply(this, [input, ...args]).catch(e => {
+      if (e && e.message && e.message.includes('AdBlock')) incAdBlock();
+      throw e;
+    });
+  };
+})();
 
 // ── СЕРВЕРЫ ───────────────────────────────────────
 // Пробуем по очереди. Дефолтный (без хоста) = 0.peerjs.com
@@ -342,14 +472,176 @@ function toEmbedUrl(url) {
   }
 }
 
-// ── ВИДЕО ─────────────────────────────────────────
+// ── ВИДЕО + YouTube API ───────────────────────────
 function loadVideoFrame(url) {
   if (!url) return;
-  const ifr = document.getElementById('player');
-  ifr.src = url;
-  ifr.style.display = 'block';
-  document.getElementById('videoPlaceholder').style.display = 'none';
   currentVideo = url;
+
+  // Если это YouTube embed — используем IFrame API для синхронизации
+  const ytMatch = url.match(/youtube\.com\/embed\/([^?]+)/);
+  if (ytMatch) {
+    loadYouTubePlayer(ytMatch[1]);
+  } else {
+    // Для Rutube, VK — обычный iframe
+    destroyYTPlayer();
+    const ifr = document.getElementById('player');
+    ifr.src = url;
+    ifr.style.display = 'block';
+    document.getElementById('videoPlaceholder').style.display = 'none';
+    setSyncBadge('live');
+  }
+}
+
+function destroyYTPlayer() {
+  if (ytPlayer) { try { ytPlayer.destroy(); } catch(e) {} ytPlayer = null; ytReady = false; }
+  clearInterval(syncInterval);
+}
+
+// YouTube IFrame API
+function loadYouTubePlayer(videoId) {
+  destroyYTPlayer();
+  document.getElementById('player').style.display = 'none';
+  document.getElementById('videoPlaceholder').style.display = 'none';
+
+  // Создаём div-контейнер для YT
+  let ytDiv = document.getElementById('ytPlayerDiv');
+  if (!ytDiv) {
+    ytDiv = document.createElement('div');
+    ytDiv.id = 'ytPlayerDiv';
+    ytDiv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;z-index:2;';
+    document.querySelector('.video-container').appendChild(ytDiv);
+  }
+  ytDiv.style.display = 'block';
+
+  function createPlayer() {
+    ytPlayer = new YT.Player('ytPlayerDiv', {
+      videoId: videoId,
+      playerVars: { autoplay: 1, rel: 0, playsinline: 1, enablejsapi: 1 },
+      events: {
+        onReady: onYTReady,
+        onStateChange: onYTStateChange,
+      }
+    });
+  }
+
+  if (window.YT && YT.Player) {
+    createPlayer();
+  } else {
+    // Загружаем API если ещё не загружен
+    if (!document.getElementById('ytApiScript')) {
+      const s = document.createElement('script');
+      s.id = 'ytApiScript';
+      s.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(s);
+    }
+    window.onYouTubeIframeAPIReady = createPlayer;
+  }
+}
+
+function onYTReady(event) {
+  ytReady = true;
+  // Если гость — ждём sync от хоста; если хост — начинаем рассылать
+  if (isHost) {
+    startHostSyncLoop();
+  }
+  setSyncBadge('live');
+}
+
+function onYTStateChange(event) {
+  if (!ytReady) return;
+  if (ignoreStateChange) { ignoreStateChange = false; return; }
+  const S = YT.PlayerState;
+
+  if (event.data === S.BUFFERING) {
+    isBuffering = true;
+    document.getElementById('bufferOverlay').classList.add('active');
+    setSyncBadge('buffering');
+    sendBufferState(true);
+  } else {
+    if (isBuffering) {
+      isBuffering = false;
+      document.getElementById('bufferOverlay').classList.remove('active');
+      setSyncBadge('live');
+      sendBufferState(false);
+    }
+  }
+
+  if (!isHost) return; // гости не рассылают play/pause сами — только хост
+
+  if (event.data === S.PLAYING || event.data === S.PAUSED) {
+    const t = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
+    const playing = event.data === S.PLAYING;
+    const syncData = { type: 'sync', action: playing ? 'play' : 'pause', time: t, ts: Date.now() };
+    broadcast(syncData);
+  }
+}
+
+function startHostSyncLoop() {
+  clearInterval(syncInterval);
+  // Каждые 5 сек рассылаем позицию для борьбы с десинком
+  syncInterval = setInterval(() => {
+    if (!ytReady || !ytPlayer) return;
+    const state = ytPlayer.getPlayerState ? ytPlayer.getPlayerState() : -1;
+    const t = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
+    const playing = state === YT.PlayerState.PLAYING;
+    broadcast({ type: 'sync', action: playing ? 'play' : 'pause', time: t, ts: Date.now(), periodic: true });
+  }, 5000);
+}
+
+function applySyncFromHost(data) {
+  if (!ytReady || !ytPlayer) return;
+  const now = Date.now();
+  const lag = (now - data.ts) / 1000; // задержка в секундах
+  const targetTime = data.time + lag;
+
+  const currentTime = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
+  const drift = Math.abs(currentTime - targetTime);
+
+  if (drift > 2 || !data.periodic) {
+    // Если расхождение > 2 сек или это команда play/pause — синхронизируем
+    ignoreStateChange = true;
+    setSyncBadge('syncing');
+    ytPlayer.seekTo(targetTime, true);
+    setTimeout(() => setSyncBadge('live'), 1200);
+  }
+
+  if (data.action === 'play') {
+    if (ytPlayer.getPlayerState() !== YT.PlayerState.PLAYING) {
+      ignoreStateChange = true;
+      ytPlayer.playVideo();
+    }
+  } else if (data.action === 'pause') {
+    if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) {
+      ignoreStateChange = true;
+      ytPlayer.pauseVideo();
+    }
+  }
+}
+
+function setSyncBadge(state) {
+  const b = document.getElementById('syncBadge');
+  if (!b) return;
+  b.className = 'sync-badge';
+  if (state === 'live') { b.textContent = '🟢 Синхронизировано'; }
+  else if (state === 'syncing') { b.textContent = '🔄 Синхронизация...'; b.classList.add('syncing'); }
+  else if (state === 'buffering') { b.textContent = '⏳ Буферизация'; b.classList.add('buffering'); }
+}
+
+function sendBufferState(buffering) {
+  const data = { type: 'buffer_state', uid: myId, name: myName, buffering };
+  if (isHost) {
+    broadcast(data);
+  } else if (hostConn && hostConn.open) {
+    hostConn.send(data);
+  }
+}
+
+function updateBuffersList(incoming) {
+  if (incoming) guestBuffers[incoming.uid] = incoming;
+  const buffering = Object.values(guestBuffers).filter(x => x.buffering).map(x => x.name);
+  const el = document.getElementById('buffersList');
+  if (!el) return;
+  el.textContent = buffering.length ? `⏳ Буферит: ${buffering.join(', ')}` : '';
 }
 
 // ── ЧАТ ───────────────────────────────────────────
@@ -546,6 +838,15 @@ function hostReceive(data, fromConn) {
     renderMsg(msg);
     broadcast(msg, fromConn);
   }
+  if (data.type === 'reaction') {
+    showReactionFly(data.emoji, data.name);
+    broadcast(data, fromConn);
+  }
+  if (data.type === 'buffer_state') {
+    guestBuffers[fromConn.peer] = data;
+    updateBuffersList();
+    broadcast(data, fromConn);
+  }
 }
 
 // ── JOIN ROOM ─────────────────────────────────────
@@ -644,6 +945,9 @@ function guestReceive(data) {
   if (data.type === 'chat') renderMsg(data);
   if (data.type === 'system') renderMsg(data);
   if (data.type === 'video') loadVideoFrame(data.url);
+  if (data.type === 'sync') applySyncFromHost(data);
+  if (data.type === 'reaction') showReactionFly(data.emoji, data.name);
+  if (data.type === 'buffer_state') updateBuffersList(data);
 }
 
 // ── CHAT ──────────────────────────────────────────
@@ -668,7 +972,34 @@ document.getElementById('chatInput').addEventListener('keydown', e => {
   }
 });
 
-// ── VIDEO ──────────────────────────────────────────
+// ── РЕАКЦИИ ───────────────────────────────────────
+window.sendReaction = function(emoji) {
+  const data = { type: 'reaction', emoji, name: myName, uid: myId };
+  showReactionFly(emoji, myName);
+  if (isHost) {
+    broadcast(data);
+  } else if (hostConn && hostConn.open) {
+    hostConn.send(data);
+  }
+};
+
+function showReactionFly(emoji, name) {
+  const el = document.createElement('div');
+  el.className = 'reaction-fly';
+  el.textContent = emoji;
+  // Случайное горизонтальное положение в зоне видео
+  const videoRect = document.querySelector('.video-container').getBoundingClientRect();
+  const x = videoRect.left + Math.random() * (videoRect.width - 60);
+  const y = videoRect.bottom - 40;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+  // Тихо показываем в чате
+  renderMsg({ type: 'system', text: `${name}: ${emoji}` });
+}
+
+
 window.setVideo = function() {
   const rawUrl = document.getElementById('videoUrlInput').value.trim();
   if (!rawUrl) return;
@@ -698,6 +1029,13 @@ window.leaveRoom = function() {
   currentVideo = '';
   userNames = {};
   busy = false;
+
+  clearInterval(syncInterval);
+  destroyYTPlayer();
+  const ytDiv = document.getElementById('ytPlayerDiv');
+  if (ytDiv) ytDiv.remove();
+  guestBuffers = {};
+  document.getElementById('buffersList').textContent = '';
 
   // Сброс UI комнаты
   document.getElementById('room').style.display = 'none';
