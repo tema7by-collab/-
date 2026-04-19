@@ -33,7 +33,6 @@ input::placeholder{color:var(--muted);}
 .btn.secondary:hover{border-color:var(--accent);color:var(--accent);}
 .divider{display:flex;align-items:center;gap:1rem;color:var(--muted);font-size:.82rem;margin:1.2rem 0;}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
-.error-msg{color:var(--accent);font-size:.85rem;margin-top:.5rem;display:none;}
 .info-box{background:rgba(255,107,53,.07);border:1px solid rgba(255,107,53,.2);border-radius:10px;padding:.85rem 1rem;font-size:.82rem;color:#ff9f6b;line-height:1.6;margin-bottom:1rem;text-align:left;}
 
 #room{display:none;height:100vh;flex-direction:column;}
@@ -119,7 +118,7 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
     <div class="tagline">Смотрите вместе — без серверов</div>
 
     <div class="info-box">
-      ⚡ P2P через WebRTC — данные идут напрямую между браузерами. Комнаты живут пока открыты вкладки.
+      ⚡ P2P через BitTorrent-трекеры — никаких серверов вообще. Комнаты живут пока открыты вкладки.
     </div>
 
     <div class="card">
@@ -140,7 +139,6 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
         <input type="text" id="roomCodeInput" placeholder="Код комнаты..." maxlength="40" autocomplete="off">
         <button class="btn secondary" onclick="joinRoom()">Войти →</button>
       </div>
-      <div class="error-msg" id="joinError">Не удалось подключиться. Хост офлайн или код неверный.</div>
     </div>
   </div>
 </div>
@@ -202,66 +200,27 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
 <div class="connecting" id="connectingOverlay" style="display:none">
   <div class="spinner"></div>
   <p id="connectingMsg">Подключение...</p>
-  <small id="connectingDetail"></small>
+  <small id="connectingDetail">Это может занять до 15 секунд</small>
 </div>
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<script>
-// ─────────────────────────────────────────────────────────
-// Используем несколько публичных STUN серверов + PeerJS CDN
-// без зависимости от peerjs.com (который нестабилен)
-// ─────────────────────────────────────────────────────────
+<!-- Trystero via torrent (no servers at all) -->
+<script type="module">
+// Trystero — P2P через публичные BitTorrent-трекеры, без серверов
+import { joinRoom as trysteroJoin } from 'https://cdn.jsdelivr.net/npm/trystero@0.21.0/torrent/index.js';
 
-// Динамически загружаем PeerJS из нескольких CDN
-async function loadPeerJS() {
-  const cdns = [
-    'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js',
-    'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js',
-  ];
-  for (const src of cdns) {
-    try {
-      await new Promise((res, rej) => {
-        if (window.Peer) { res(); return; }
-        const s = document.createElement('script');
-        s.src = src; s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
-      });
-      if (window.Peer) { console.log('PeerJS loaded from', src); return true; }
-    } catch(e) { console.warn('CDN failed:', src); }
-  }
-  return false;
-}
+// ── CONFIG ────────────────────────────────────────
+const APP_ID = 'watchwave-v1'; // уникальный ID приложения
 
-// ICE конфиг с несколькими публичными STUN серверами
-const ICE_CONFIG = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:stun.nextcloud.com:443' },
-    { urls: 'stun:freestun.net:3478' },
-  ]
-};
-
-// Список сигнальных серверов PeerJS — пробуем по очереди
-const PEER_SERVERS = [
-  { host: 'peerjs.fly.dev',   port: 443, path: '/', secure: true },
-  { host: '0.peerjs.com',     port: 443, path: '/', secure: true },
-  { host: 'peer.smpte.app',   port: 443, path: '/', secure: true },
-];
-
-let peer = null;
-let connections = [];
-let hostConn = null;
 let myName = '';
 let myId = '';
 let isHost = false;
 let currentVideo = '';
-let userNames = {};
+let room = null;
+let userNames = {}; // peerId -> name
+let peerCount = 0;
 
 // ── UTILS ─────────────────────────────────────────
 function genId() { return Math.random().toString(36).substr(2,8).toUpperCase(); }
@@ -269,14 +228,13 @@ function genId() { return Math.random().toString(36).substr(2,8).toUpperCase(); 
 function showToast(msg, color) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.style.background = color || '#22c55e';
-  t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000);
+  t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3500);
 }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-function showConnecting(msg, detail) {
+function showConnecting(msg) {
   document.getElementById('connectingOverlay').style.display = 'flex';
   document.getElementById('connectingMsg').textContent = msg || 'Подключение...';
-  document.getElementById('connectingDetail').textContent = detail || '';
 }
 function hideConnecting() {
   document.getElementById('connectingOverlay').style.display = 'none';
@@ -322,15 +280,9 @@ function renderMsg(data) {
   box.appendChild(div); box.scrollTop = box.scrollHeight;
 }
 
-function broadcast(data, except) {
-  connections.forEach(c => { if(c !== except && c.open) c.send(data); });
-}
-
-function updateCount() {
-  const n = isHost
-    ? 1 + connections.filter(c => c.open).length
-    : Object.keys(userNames).length + 1;
-  document.getElementById('usersCount').textContent = n;
+function updateCount(n) {
+  peerCount = n;
+  document.getElementById('usersCount').textContent = n + 1; // +1 себя
 }
 
 function enterRoomUI(roomId) {
@@ -340,225 +292,151 @@ function enterRoomUI(roomId) {
   document.getElementById('shareCode').textContent = roomId;
   const url = `${location.origin}${location.pathname}?r=${roomId}`;
   document.getElementById('shareLinkInput').value = url;
-  updateCount();
+  document.getElementById('usersCount').textContent = 1;
 }
 
-// ── СОЗДАТЬ PEER с fallback серверами ─────────────
-function createPeer(id, serverIndex) {
-  return new Promise((resolve, reject) => {
-    if(serverIndex >= PEER_SERVERS.length) {
-      reject(new Error('Все серверы недоступны'));
-      return;
+// ── JOIN ROOM (trystero) ───────────────────────────
+function setupRoom(roomId) {
+  // trystero автоматически находит пиров через BitTorrent-трекеры
+  room = trysteroJoin({ appId: APP_ID }, roomId);
+
+  // Создаём каналы передачи данных
+  const [sendChat, onChat] = room.makeAction('chat');
+  const [sendVideo, onVideo] = room.makeAction('video');
+  const [sendName, onName] = room.makeAction('name');
+  const [sendState, onState] = room.makeAction('state'); // хост отдаёт состояние новым
+
+  // Сохраняем функции отправки глобально
+  window._send = { sendChat, sendVideo, sendName, sendState };
+
+  // Когда кто-то подключился
+  room.onPeerJoin(peerId => {
+    peerCount++;
+    document.getElementById('usersCount').textContent = peerCount + 1;
+    // Представляемся
+    sendName({ uid: myId, name: myName }, peerId);
+    // Если мы хост — отдаём текущее состояние
+    if(isHost && currentVideo) {
+      sendState({ video: currentVideo }, peerId);
     }
-    const srv = PEER_SERVERS[serverIndex];
-    showConnecting('Подключение...', `Сервер ${serverIndex + 1}/${PEER_SERVERS.length}`);
+    renderMsg({ type:'system', text:'Кто-то вошёл в комнату' });
+  });
 
-    const p = new Peer(id, {
-      ...srv,
-      debug: 0,
-      config: ICE_CONFIG
-    });
+  // Когда кто-то ушёл
+  room.onPeerLeave(peerId => {
+    peerCount = Math.max(0, peerCount - 1);
+    document.getElementById('usersCount').textContent = peerCount + 1;
+    const who = userNames[peerId] || 'Кто-то';
+    delete userNames[peerId];
+    renderMsg({ type:'system', text:`${who} покинул комнату` });
+  });
 
-    const timer = setTimeout(() => {
-      p.destroy();
-      // Пробуем следующий сервер
-      createPeer(id, serverIndex + 1).then(resolve).catch(reject);
-    }, 5000);
+  // Получаем имена
+  onName(({ uid, name }, peerId) => {
+    userNames[peerId] = name;
+  });
 
-    p.on('open', () => {
-      clearTimeout(timer);
-      resolve(p);
-    });
+  // Получаем чат
+  onChat((data) => {
+    renderMsg(data);
+  });
 
-    p.on('error', (e) => {
-      clearTimeout(timer);
-      p.destroy();
-      if(e.type === 'network' || e.type === 'server-error' || e.type === 'socket-error') {
-        createPeer(id, serverIndex + 1).then(resolve).catch(reject);
-      } else {
-        reject(e);
-      }
-    });
+  // Получаем видео
+  onVideo(({ url, senderName }) => {
+    loadVideoFrame(url);
+    renderMsg({ type:'system', text:`${senderName} поставил новое видео` });
+  });
+
+  // Получаем состояние (для новых участников от хоста)
+  onState(({ video }) => {
+    if(video && !currentVideo) loadVideoFrame(video);
   });
 }
 
 // ── CREATE ROOM ───────────────────────────────────
-window.createRoom = async function() {
+window.createRoom = function() {
   const name = document.getElementById('nameInput').value.trim();
   if(!name) { showToast('Введи имя!', 'var(--accent)'); return; }
 
-  myName = name; myId = genId(); isHost = true;
+  myName = name;
+  myId = genId();
+  isHost = true;
+
+  const roomId = genId();
   showConnecting('Создаём комнату...');
 
-  const loaded = await loadPeerJS();
-  if(!loaded) {
-    hideConnecting();
-    showToast('Не удалось загрузить библиотеку. Проверь интернет.', 'var(--accent)');
-    return;
-  }
-
   try {
-    peer = await createPeer(myId, 0);
+    setupRoom(roomId);
+    hideConnecting();
+    enterRoomUI(roomId);
+    renderMsg({ type:'system', text:'Комната создана. Ты — хост!' });
   } catch(e) {
     hideConnecting();
-    showToast('Не удалось подключиться к серверу. Попробуй позже.', 'var(--accent)');
-    return;
+    showToast('Ошибка: ' + e.message, 'var(--accent)');
   }
-
-  hideConnecting();
-  enterRoomUI(myId);
-  renderMsg({ type:'system', text:'Комната создана. Ты — хост!' });
-
-  // Принимаем гостей
-  peer.on('connection', conn => {
-    conn.on('open', () => {
-      connections.push(conn);
-      conn.send({ type:'init', video:currentVideo, names:userNames, hostName:myName });
-      updateCount();
-    });
-    conn.on('data', data => hostReceive(data, conn));
-    conn.on('close', () => {
-      connections = connections.filter(c => c !== conn);
-      const who = userNames[conn.peer] || 'Кто-то';
-      delete userNames[conn.peer];
-      updateCount();
-      const msg = { type:'system', text:`${who} покинул комнату` };
-      renderMsg(msg); broadcast(msg, conn);
-    });
-  });
-
-  peer.on('error', e => console.warn('Peer error after open:', e.type));
 };
 
-function hostReceive(data, fromConn) {
-  if(data.type === 'join') {
-    userNames[fromConn.peer] = data.name;
-    const msg = { type:'system', text:`${data.name} вошёл в комнату` };
-    renderMsg(msg); broadcast(msg, fromConn);
-    const np = { type:'names', names:userNames, hostName:myName };
-    broadcast(np, fromConn); fromConn.send(np);
-    updateCount();
-  }
-  if(data.type === 'chat') { renderMsg(data); broadcast(data, fromConn); }
-  if(data.type === 'video') {
-    loadVideoFrame(data.url); broadcast(data, fromConn);
-    const msg = { type:'system', text:`${data.name} поставил новое видео` };
-    renderMsg(msg); broadcast(msg, fromConn);
-  }
-}
-
 // ── JOIN ROOM ─────────────────────────────────────
-window.joinRoom = async function() {
+window.joinRoom = function() {
   const name = document.getElementById('nameInput').value.trim();
   const code = document.getElementById('roomCodeInput').value.trim().toUpperCase();
   if(!name) { showToast('Введи имя!', 'var(--accent)'); return; }
   if(!code) { showToast('Введи код!', 'var(--accent)'); return; }
 
-  myName = name; myId = genId() + 'G'; isHost = false;
-  showConnecting('Загрузка...');
+  myName = name;
+  myId = genId() + 'G';
+  isHost = false;
 
-  const loaded = await loadPeerJS();
-  if(!loaded) {
-    hideConnecting();
-    showToast('Не удалось загрузить библиотеку. Проверь интернет.', 'var(--accent)');
-    return;
-  }
-
-  showConnecting('Подключение к хосту...');
+  showConnecting('Ищем комнату...');
 
   try {
-    peer = await createPeer(myId, 0);
+    setupRoom(code);
+    hideConnecting();
+    enterRoomUI(code);
+    renderMsg({ type:'system', text:'Подключён! Ожидаем других участников...' });
+    showToast('Вошёл в комнату! Дождись хоста.', '#22c55e');
   } catch(e) {
     hideConnecting();
-    document.getElementById('joinError').style.display = 'block';
-    document.getElementById('joinError').textContent = 'Ошибка сети. Проверь интернет.';
-    return;
+    showToast('Ошибка: ' + e.message, 'var(--accent)');
   }
-
-  hostConn = peer.connect(code, { reliable: true, config: ICE_CONFIG });
-  let ok = false;
-
-  const timer = setTimeout(() => {
-    if(!ok) {
-      hideConnecting();
-      document.getElementById('joinError').style.display = 'block';
-      document.getElementById('joinError').textContent = 'Не удалось подключиться. Хост офлайн?';
-      peer.destroy();
-    }
-  }, 10000);
-
-  hostConn.on('open', () => {
-    ok = true; clearTimeout(timer); hideConnecting();
-    document.getElementById('joinError').style.display = 'none';
-    hostConn.send({ type:'join', name:myName, uid:myId });
-    enterRoomUI(code);
-    renderMsg({ type:'system', text:'Подключён к комнате!' });
-  });
-  hostConn.on('data', data => guestReceive(data));
-  hostConn.on('close', () => renderMsg({ type:'system', text:'Хост отключился.' }));
-  hostConn.on('error', e => {
-    clearTimeout(timer);
-    hideConnecting();
-    document.getElementById('joinError').style.display = 'block';
-    document.getElementById('joinError').textContent = 'Ошибка: ' + e.type;
-  });
-
-  peer.on('error', e => {
-    clearTimeout(timer);
-    if(!ok) {
-      hideConnecting();
-      document.getElementById('joinError').style.display = 'block';
-      document.getElementById('joinError').textContent = 'Ошибка: ' + e.type;
-    }
-  });
 };
 
-function guestReceive(data) {
-  if(data.type === 'init') { if(data.video) loadVideoFrame(data.video); userNames=data.names||{}; updateCount(); }
-  if(data.type === 'names') { userNames=data.names||{}; updateCount(); }
-  if(data.type === 'chat') renderMsg(data);
-  if(data.type === 'system') renderMsg(data);
-  if(data.type === 'video') loadVideoFrame(data.url);
-}
-
-// ── CHAT ──────────────────────────────────────────
+// ── SEND CHAT ──────────────────────────────────────
 window.sendMessage = function() {
   const inp = document.getElementById('chatInput');
   const text = inp.value.trim(); if(!text) return;
   inp.value = '';
   const data = { type:'chat', uid:myId, name:myName, text };
   renderMsg(data);
-  if(isHost) broadcast(data);
-  else if(hostConn && hostConn.open) hostConn.send(data);
+  if(window._send) window._send.sendChat(data);
 };
 document.getElementById('chatInput').addEventListener('keydown', e => { if(e.key === 'Enter') window.sendMessage(); });
 
-// ── VIDEO ──────────────────────────────────────────
+// ── SET VIDEO ──────────────────────────────────────
 window.setVideo = function() {
   const url = document.getElementById('videoUrlInput').value.trim(); if(!url) return;
   const embed = toEmbedUrl(url);
   if(!embed) { showToast('Не распознал ссылку', 'var(--accent)'); return; }
-  const data = { type:'video', url:embed, name:myName };
   loadVideoFrame(embed);
-  if(isHost) { broadcast(data); renderMsg({type:'system',text:`${myName} поставил новое видео`}); }
-  else if(hostConn && hostConn.open) hostConn.send(data);
+  renderMsg({ type:'system', text:`${myName} поставил новое видео` });
+  if(window._send) window._send.sendVideo({ url: embed, senderName: myName });
 };
 
 // ── LEAVE ──────────────────────────────────────────
 window.leaveRoom = function() {
-  if(peer) peer.destroy();
-  peer=null; connections=[]; hostConn=null; isHost=false; currentVideo=''; userNames={};
-  document.getElementById('room').style.display='none';
-  document.getElementById('lobby').style.display='flex';
-  document.getElementById('player').src='';
-  document.getElementById('player').style.display='none';
-  document.getElementById('videoPlaceholder').style.display='flex';
-  document.getElementById('chatMessages').innerHTML='';
+  if(room) room.leave();
+  room = null; window._send = null; isHost = false; currentVideo = ''; userNames = {}; peerCount = 0;
+  document.getElementById('room').style.display = 'none';
+  document.getElementById('lobby').style.display = 'flex';
+  document.getElementById('player').src = '';
+  document.getElementById('player').style.display = 'none';
+  document.getElementById('videoPlaceholder').style.display = 'flex';
+  document.getElementById('chatMessages').innerHTML = '';
 };
 
 // ── SHARE ──────────────────────────────────────────
 window.showShareModal = function() { document.getElementById('shareModal').classList.add('show'); };
-window.hideShareModal = function(e) { if(e.target.id==='shareModal') document.getElementById('shareModal').classList.remove('show'); };
+window.hideShareModal = function(e) { if(e.target.id === 'shareModal') document.getElementById('shareModal').classList.remove('show'); };
 window.copyLink = function() {
   navigator.clipboard.writeText(document.getElementById('shareLinkInput').value)
     .then(() => showToast('Ссылка скопирована!'));
@@ -567,7 +445,10 @@ window.copyLink = function() {
 // ── URL PARAM ──────────────────────────────────────
 (function() {
   const r = new URLSearchParams(location.search).get('r');
-  if(r) { document.getElementById('roomCodeInput').value = r; showToast(`Комната найдена — введи имя и войди!`); }
+  if(r) {
+    document.getElementById('roomCodeInput').value = r;
+    showToast('Комната найдена — введи имя и войди!');
+  }
 })();
 </script>
 </body>
