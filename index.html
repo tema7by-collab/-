@@ -489,11 +489,6 @@ function getTitle(url){
 // ══════════════════════════════════════════════════
 //  ВИДЕО
 // ══════════════════════════════════════════════════
-// pendingSync: sync-команды пришедшие до готовности плеера
-let pendingSync=null;
-// ignoreCount: сколько ещё событий игнорировать (не булево!)
-let ignoreCount=0;
-
 function loadVideoFrame(url){
   if(!url)return;
   currentVideo=url;
@@ -513,6 +508,8 @@ function destroyYTPlayer(){
   if(ytPlayer){try{ytPlayer.destroy();}catch(e){} ytPlayer=null; ytReady=false;}
   clearInterval(syncInterval); syncInterval=null;
   ignoreCount=0; pendingSync=null;
+  isBuffering=false;
+  const bo=document.getElementById('bufferOverlay'); if(bo) bo.classList.remove('active');
 }
 
 function loadYouTubePlayer(videoId){
@@ -920,7 +917,11 @@ function hostReceive(data,conn){
   }
   if(data.type==='reaction'){showReactionFly(data.emoji);broadcast(data,conn);}
   if(data.type==='buffer_state'){guestBuffers[conn.peer]={name:data.name,buffering:data.buffering};renderBufs();broadcast(data,conn);}
-  if(data.type==='queue_add'){videoQueue.push(data.item);renderQueue();broadcast(data,conn);renderMsg({type:'system',text:`${data.item.addedBy} добавил: ${data.item.title}`});broadcast({type:'system',text:`${data.item.addedBy} добавил: ${data.item.title}`},conn);}
+  if(data.type==='queue_add'){
+    videoQueue.push(data.item); renderQueue(); broadcast(data,conn);
+    const qmsg={type:'system',text:`${data.item.addedBy} добавил: ${data.item.title}`};
+    renderMsg(qmsg); broadcast(qmsg,conn);
+  }
   if(data.type==='queue_remove'){videoQueue=videoQueue.filter(x=>x.id!==data.id);renderQueue();broadcast(data,conn);}
   if(data.type==='ping'){try{conn.send({type:'pong',nonce:data.nonce});}catch(e){}}
   if(data.type==='pong'){handlePong(data.nonce);}
