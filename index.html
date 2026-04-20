@@ -384,7 +384,8 @@ let isHost=false,busy=false,currentVideo='';
 let userNames={};  // peerId → {name,avatar,color}
 
 // Sync
-let ytPlayer=null,ytReady=false,syncInterval=null,ignoreStateChange=false,isBuffering=false;
+let ytPlayer=null,ytReady=false,syncInterval=null,ignoreCount=0,isBuffering=false;
+let pendingSync=null;
 let guestBuffers={};  // uid → {name,buffering}
 
 // Ping
@@ -488,9 +489,15 @@ function getTitle(url){
 // ══════════════════════════════════════════════════
 //  ВИДЕО
 // ══════════════════════════════════════════════════
+// pendingSync: sync-команды пришедшие до готовности плеера
+let pendingSync=null;
+// ignoreCount: сколько ещё событий игнорировать (не булево!)
+let ignoreCount=0;
+
 function loadVideoFrame(url){
   if(!url)return;
   currentVideo=url;
+  pendingSync=null;
   const ym=url.match(/youtube\.com\/embed\/([^?&]+)/);
   if(ym){ loadYouTubePlayer(ym[1]); }
   else {
@@ -505,6 +512,7 @@ function loadVideoFrame(url){
 function destroyYTPlayer(){
   if(ytPlayer){try{ytPlayer.destroy();}catch(e){} ytPlayer=null; ytReady=false;}
   clearInterval(syncInterval); syncInterval=null;
+  ignoreCount=0; pendingSync=null;
 }
 
 function loadYouTubePlayer(videoId){
@@ -512,9 +520,7 @@ function loadYouTubePlayer(videoId){
   document.getElementById('player').style.display='none';
   document.getElementById('videoPlaceholder').style.display='none';
 
-  // Убираем старый div если есть
   const old=document.getElementById('ytWrap'); if(old)old.remove();
-
   const wrap=document.createElement('div');
   wrap.id='ytWrap'; wrap.style.cssText='position:absolute;inset:0;z-index:2;';
   const inner=document.createElement('div'); inner.id='ytInner';
@@ -522,37 +528,61 @@ function loadYouTubePlayer(videoId){
   document.querySelector('.video-container').appendChild(wrap);
 
   function create(){
+    // Убеждаемся что ytInner ещё существует (мог быть удалён если видео сменили быстро)
+    if(!document.getElementById('ytInner'))return;
     ytPlayer=new YT.Player('ytInner',{
       videoId, width:'100%', height:'100%',
       playerVars:{autoplay:1,rel:0,playsinline:1,enablejsapi:1},
       events:{onReady:onYTReady,onStateChange:onYTStateChange}
     });
   }
-  if(window.YT&&YT.Player){create();}
-  else{
+
+  if(window.YT&&window.YT.Player){
+    create();
+  } else {
+    // Сохраняем в очередь — может быть несколько вызовов до загрузки API
+    window._ytCreateQueue=window._ytCreateQueue||[];
+    window._ytCreateQueue.push(create);
     if(!document.getElementById('ytApi')){
-      const s=document.createElement('script');s.id='ytApi';
-      s.src='https://www.youtube.com/iframe_api';document.head.appendChild(s);
+      const s=document.createElement('script'); s.id='ytApi';
+      s.src='https://www.youtube.com/iframe_api'; document.head.appendChild(s);
     }
-    window.onYouTubeIframeAPIReady=create;
+    window.onYouTubeIframeAPIReady=function(){
+      const q=window._ytCreateQueue||[]; window._ytCreateQueue=[];
+      // Вызываем только последний (самый актуальный)
+      if(q.length) q[q.length-1]();
+    };
   }
 }
 
 function onYTReady(){
-  ytReady=true; setSyncBadge('live');
-  if(isHost) startSyncLoop();
+  ytReady=true;
+  setSyncBadge('live');
+  if(isHost){
+    startSyncLoop();
+  } else if(pendingSync){
+    // Применяем отложенный sync
+    applySync(pendingSync);
+    pendingSync=null;
+  }
 }
 
 function onYTStateChange(ev){
   if(!ytReady)return;
   const S=YT.PlayerState;
+
+  // Буферизация — обрабатываем всегда
   if(ev.data===S.BUFFERING){
     if(!isBuffering){isBuffering=true;document.getElementById('bufferOverlay').classList.add('active');setSyncBadge('buf');sendBufState(true);}
   } else {
     if(isBuffering){isBuffering=false;document.getElementById('bufferOverlay').classList.remove('active');if(ev.data!==S.UNSTARTED)setSyncBadge('live');sendBufState(false);}
   }
+
+  // Игнорируем программные события (seek/play/pause из applySync)
+  if(ignoreCount>0){ignoreCount--;return;}
+
   if(!isHost)return;
-  if(ignoreStateChange){ignoreStateChange=false;return;}
+
   if(ev.data===S.PLAYING||ev.data===S.PAUSED){
     broadcast({type:'sync',action:ev.data===S.PLAYING?'play':'pause',time:safeTime(),ts:Date.now()});
   }
@@ -561,28 +591,45 @@ function onYTStateChange(ev){
 
 function startSyncLoop(){
   clearInterval(syncInterval);
+  // Немедленно шлём текущее состояние новому гостю через 1 сек после старта
   syncInterval=setInterval(()=>{
     if(!ytReady||!ytPlayer)return;
-    const playing=ytPlayer.getPlayerState&&ytPlayer.getPlayerState()===YT.PlayerState.PLAYING;
+    const state=ytPlayer.getPlayerState?ytPlayer.getPlayerState():-1;
+    const playing=state===YT.PlayerState.PLAYING;
     broadcast({type:'sync',action:playing?'play':'pause',time:safeTime(),ts:Date.now(),periodic:true});
-  },5000);
+  },4000);
 }
 
 function applySync(data){
-  if(!ytReady||!ytPlayer)return;
+  if(!ytReady||!ytPlayer){
+    // Плеер ещё не готов — сохраняем для применения в onYTReady
+    pendingSync=data; return;
+  }
   const lag=(Date.now()-data.ts)/1000;
   const target=data.time+lag;
-  const drift=Math.abs(safeTime()-target);
-  if(drift>2||!data.periodic){
-    ignoreStateChange=true; setSyncBadge('sync');
+  const cur=safeTime();
+  const drift=Math.abs(cur-target);
+  const state=ytPlayer.getPlayerState?ytPlayer.getPlayerState():-1;
+  const S=YT.PlayerState;
+
+  // Seek если расхождение > 1.5 сек или это явная команда (не периодическая)
+  if(drift>1.5||!data.periodic){
+    ignoreCount+=2; // seek + последующий playing/paused event
+    setSyncBadge('sync');
     ytPlayer.seekTo(target,true);
-    setTimeout(()=>setSyncBadge('live'),1500);
+    setTimeout(()=>{ if(document.getElementById('syncBadge'))setSyncBadge('live'); },1500);
   }
-  if(data.action==='play'){if(ytPlayer.getPlayerState()!==YT.PlayerState.PLAYING){ignoreStateChange=true;ytPlayer.playVideo();}}
-  else if(data.action==='pause'){if(ytPlayer.getPlayerState()===YT.PlayerState.PLAYING){ignoreStateChange=true;ytPlayer.pauseVideo();}}
+
+  if(data.action==='play'){
+    if(state!==S.PLAYING&&state!==S.BUFFERING){ignoreCount++;ytPlayer.playVideo();}
+  } else if(data.action==='pause'){
+    if(state===S.PLAYING){ignoreCount++;ytPlayer.pauseVideo();}
+  }
 }
 
-function safeTime(){try{return ytPlayer&&ytPlayer.getCurrentTime?ytPlayer.getCurrentTime():0;}catch{return 0;}}
+function safeTime(){
+  try{return (ytPlayer&&ytPlayer.getCurrentTime)?ytPlayer.getCurrentTime():0;}catch{return 0;}
+}
 
 function setSyncBadge(state){
   const b=document.getElementById('syncBadge'); if(!b)return;
@@ -719,8 +766,11 @@ function startPing(conn,peerId){
   stopPing(peerId);
   pingTimers[peerId]=setInterval(()=>{
     if(!conn||!conn.open){stopPing(peerId);return;}
+    // Чистим старые неответившие callbacks (старше 10 сек)
+    const now=Date.now();
+    Object.keys(pingCallbacks).forEach(k=>{ if(now-pingCallbacks[k].ts>10000) delete pingCallbacks[k]; });
     const nonce=genId();
-    pingCallbacks[nonce]={ts:Date.now(),peerId};
+    pingCallbacks[nonce]={ts:now,peerId};
     try{conn.send({type:'ping',nonce});}catch(e){}
   },PING_INTERVAL);
 }
@@ -821,7 +871,17 @@ window.createRoom=async function(){
   peer.on('connection',conn=>{
     conn.on('open',()=>{
       connections.push(conn);
-      conn.send({type:'init',video:currentVideo,names:userNames,hostName:myName,hostId:myId,hostAvatar:myAvatar,hostColor:myColor,queue:videoQueue});
+      conn.send({
+        type:'init',
+        video:currentVideo,
+        // Передаём текущую позицию и статус воспроизведения хоста
+        videoTime: safeTime(),
+        videoPlaying: (ytPlayer&&ytReady&&ytPlayer.getPlayerState)?ytPlayer.getPlayerState()===YT.PlayerState.PLAYING:false,
+        videoTs: Date.now(),
+        names:userNames,
+        hostName:myName,hostId:myId,hostAvatar:myAvatar,hostColor:myColor,
+        queue:videoQueue,
+      });
       startPing(conn,conn.peer);
       updateCount();
     });
@@ -853,7 +913,11 @@ function hostReceive(data,conn){
     updateCount();
   }
   if(data.type==='chat'){renderMsg(data);broadcast(data,conn);}
-  if(data.type==='video'){loadVideoFrame(data.url);broadcast(data,conn);renderMsg({type:'system',text:`${data.name} поставил видео`});broadcast({type:'system',text:`${data.name} поставил видео`},conn);}
+  if(data.type==='video'){
+    loadVideoFrame(data.url); broadcast(data,conn);
+    const sm={type:'system',text:`${data.name} поставил видео`};
+    renderMsg(sm); broadcast(sm,conn);
+  }
   if(data.type==='reaction'){showReactionFly(data.emoji);broadcast(data,conn);}
   if(data.type==='buffer_state'){guestBuffers[conn.peer]={name:data.name,buffering:data.buffering};renderBufs();broadcast(data,conn);}
   if(data.type==='queue_add'){videoQueue.push(data.item);renderQueue();broadcast(data,conn);renderMsg({type:'system',text:`${data.item.addedBy} добавил: ${data.item.title}`});broadcast({type:'system',text:`${data.item.addedBy} добавил: ${data.item.title}`},conn);}
@@ -897,6 +961,10 @@ window.joinRoom=async function(){
 function guestReceive(data){
   if(data.type==='init'){
     if(data.video) loadVideoFrame(data.video);
+    // Сохраняем sync из init чтобы применить когда плеер будет готов
+    if(data.video&&data.videoTime!=null){
+      pendingSync={type:'sync',action:data.videoPlaying?'play':'pause',time:data.videoTime,ts:data.videoTs||Date.now(),periodic:false};
+    }
     userNames=data.names||{};
     if(data.hostId) userNames[data.hostId]={name:data.hostName||'Хост',avatar:data.hostAvatar||'👤',color:data.hostColor||'#888'};
     if(data.queue){videoQueue=data.queue;renderQueue();}
@@ -942,6 +1010,7 @@ window.leaveRoom=function(){
   pingTimers={}; pingMap={}; pingCallbacks={};
   clearInterval(syncInterval); syncInterval=null;
   destroyYTPlayer();
+  pendingSync=null; ignoreCount=0;
   const yw=document.getElementById('ytWrap'); if(yw)yw.remove();
   if(peer){try{peer.destroy();}catch(e){}}
   peer=null; connections=[]; hostConn=null;
