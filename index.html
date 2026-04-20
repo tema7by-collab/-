@@ -220,7 +220,8 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
     <div class="logo">Watch<span>Wave</span></div>
     <div class="tagline">Смотрите вместе — без серверов</div>
     <div class="info-box">
-      ⚡ P2P WebRTC &nbsp;·&nbsp; 🛡 AdBlock &nbsp;·&nbsp; 🔄 Синхронизация &nbsp;·&nbsp; 🎉 Реакции &nbsp;·&nbsp; 📋 Очередь
+      ⚡ P2P WebRTC &nbsp;·&nbsp; 🛡 AdBlock &nbsp;·&nbsp; 🔄 Синхронизация &nbsp;·&nbsp; 🎉 Реакции &nbsp;·&nbsp; 📋 Очередь<br>
+      <span style="font-size:.75rem;opacity:.8">⚠️ Если не подключается на ПК — отключи VPN или фаервол</span>
     </div>
 
     <div class="card">
@@ -372,7 +373,18 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
 // ══════════════════════════════════════════════════
 const AVATARS=['🐱','🐶','🦊','🐸','🐼','🦁','🐯','🐺','🦄','🐙','🦋','🎃','👾','🤖','🧸','🎅'];
 const COLORS=['#e63950','#ff6b35','#f59e0b','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#84cc16','#f97316','#a78bfa'];
-const PEER_SERVERS=[null,{host:'peerjs.fly.dev',port:443,path:'/',secure:true}];
+const PEER_SERVERS=[
+  null,  // 0.peerjs.com дефолтный порт
+  {host:'0.peerjs.com', port:443, path:'/', secure:true},  // явно порт 443
+  {host:'peerjs.fly.dev', port:443, path:'/', secure:true},
+];
+const ICE_SERVERS={iceServers:[
+  {urls:'stun:stun.l.google.com:19302'},
+  {urls:'stun:stun1.l.google.com:19302'},
+  {urls:'stun:stun2.l.google.com:19302'},
+  {urls:'stun:stun.cloudflare.com:3478'},
+]};
+const PEER_TIMEOUT=12000;
 const PING_INTERVAL=4000;
 
 // ══════════════════════════════════════════════════
@@ -834,20 +846,43 @@ function enterRoomUI(roomId){
 function tryCreatePeer(id,si){
   return new Promise((res,rej)=>{
     const cfg=PEER_SERVERS[si];
-    showConnecting('Подключение...',`Сервер ${si+1}/${PEER_SERVERS.length}: ${cfg?cfg.host:'0.peerjs.com'}`);
-    let p; try{p=cfg===null?new Peer(id):new Peer(id,{...cfg,debug:0});}catch(e){return rej(e);}
-    const t=setTimeout(()=>{p.destroy();rej(new Error('timeout'));},7000);
+    const label=cfg?cfg.host:'0.peerjs.com';
+    showConnecting(`Подключение... (${si+1}/${PEER_SERVERS.length})`,`Сервер: ${label}`);
+    let p;
+    try{
+      const opts={debug:0,config:ICE_SERVERS};
+      p=cfg===null ? new Peer(id,opts) : new Peer(id,{...cfg,...opts});
+    }catch(e){return rej(e);}
+    const t=setTimeout(()=>{
+      try{p.destroy();}catch(_){}
+      rej(new Error('timeout'));
+    },PEER_TIMEOUT);
     p.on('open',()=>{clearTimeout(t);res(p);});
-    p.on('error',e=>{clearTimeout(t);if(e.type==='peer-unavailable'){rej(Object.assign(new Error('peer-unavailable'),{peerErr:true}));return;}p.destroy();rej(new Error(e.type));});
+    p.on('error',e=>{
+      clearTimeout(t);
+      if(e.type==='peer-unavailable'){
+        rej(Object.assign(new Error('peer-unavailable'),{peerErr:true}));
+        return;
+      }
+      try{p.destroy();}catch(_){}
+      rej(new Error(e.type));
+    });
   });
 }
 
 async function makePeer(id){
+  const errs=[];
   for(let i=0;i<PEER_SERVERS.length;i++){
     try{return await tryCreatePeer(id,i);}
-    catch(e){if(e.peerErr)throw e; console.warn(`Server ${i} failed:`,e.message);}
+    catch(e){
+      if(e.peerErr) throw e;
+      errs.push(e.message);
+      console.warn(`Сервер ${i} недоступен:`,e.message);
+    }
   }
-  throw new Error('Все серверы недоступны. Проверь интернет.');
+  // Все серверы упали — показываем детальную ошибку
+  const detail=errs.join(', ');
+  throw new Error(`Нет связи с сигнальным сервером (${detail}). Попробуй отключить VPN/фаервол или обнови страницу.`);
 }
 
 // ══════════════════════════════════════════════════
@@ -943,7 +978,7 @@ window.joinRoom=async function(){
 
   showConnecting('Ищем хоста...','Код: '+code);
   let connected=false;
-  hostConn=peer.connect(code,{reliable:true,serialization:'json'});
+  hostConn=peer.connect(code,{reliable:true,serialization:'json',metadata:{name:myName}});
   const jt=setTimeout(()=>{if(!connected){hideConnecting();setBusy(false);showErr('joinError','❌ Хост не отвечает.');peer.destroy();peer=null;}},12000);
 
   hostConn.on('open',()=>{
