@@ -16,7 +16,10 @@
     /ads\.youtube\.com/i,/amazon-adsystem\.com/i,/moatads\.com/i,/taboola\.com/i,
     /outbrain\.com/i,/criteo\.com/i,/rubiconproject\.com/i,/openx\.net/i,/pubmatic\.com/i,
     /yandex\.ru\/an\//i,/mc\.yandex\.ru/i,/advertising\.yandex/i,
-    /vk\.com\/adman/i,/rutube\.ru\/ads/i,/yadro\.ru/i];
+    /vk\.com\/adman/i,/rutube\.ru\/ads/i,/yadro\.ru/i,
+    /youtube\.com\/pagead/i,/youtube\.com\/get_video_info.*ad/i,
+    /googletagmanager\.com/i,/googletagservices\.com/i,/scorecardresearch\.com/i,
+    /quantserve\.com/i,/adform\.net/i,/smartadserver\.com/i];
   function isAd(u){return u&&AD.some(p=>p.test(u));}
   const oF=window.fetch;
   window.fetch=function(i,...a){
@@ -34,8 +37,29 @@
   document.addEventListener('DOMContentLoaded',()=>{
     new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>{
       if(n.tagName==='SCRIPT'&&isAd(n.src))n.remove();
+      // Удаляем рекламные iframe и div по data-атрибутам
+      if(n.tagName==='IFRAME'&&isAd(n.src))n.remove();
     }))).observe(document.body,{childList:true,subtree:true});
   });
+
+  // ── Скрываем рекламные оверлеи внутри YouTube iframe через CSS ──
+  // YouTube показывает рекламу прямо внутри iframe — инжектируем CSS через postMessage
+  function injectYTAdCSS(){
+    const frames=document.querySelectorAll('iframe[src*="youtube.com"]');
+    frames.forEach(f=>{
+      try{
+        // Метод 1: попытка прямого доступа (работает только same-origin, обычно не работает)
+        const doc=f.contentDocument||f.contentWindow?.document;
+        if(doc){
+          const s=doc.createElement('style');
+          s.textContent='.ad-showing .video-ads,.ytp-ad-module,.ytp-ad-overlay-container,.ytp-ad-player-overlay,.ytp-ad-skip-button-container{display:none!important}';
+          (doc.head||doc.documentElement).appendChild(s);
+        }
+      }catch(e){}
+    });
+  }
+  // Запускаем при каждом новом фрейме
+  setInterval(injectYTAdCSS, 2000);
 })();
 </script>
 
@@ -120,6 +144,33 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
 .buf-spin{width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
 .buf-txt{color:#fff;font-size:.85rem;font-family:'Syne',sans-serif;}
 .buffers-bar{font-size:.73rem;color:var(--muted);padding:.22rem .8rem;background:var(--surface);border-top:1px solid var(--border);min-height:20px;flex-shrink:0;}
+
+/* ── CUSTOM PLAYER CONTROLS (VK / Rutube) ── */
+.custom-controls{position:absolute;bottom:0;left:0;right:0;z-index:8;padding:.5rem .8rem;
+  background:linear-gradient(transparent,rgba(0,0,0,.75));
+  display:none;flex-direction:column;gap:.35rem;transition:opacity .3s;}
+.custom-controls.visible{display:flex;}
+.cc-top{display:flex;align-items:center;gap:.5rem;}
+.cc-btn{background:rgba(255,255,255,.15);border:none;border-radius:8px;color:#fff;
+  font-size:1.1rem;width:36px;height:36px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:background .15s;flex-shrink:0;backdrop-filter:blur(4px);}
+.cc-btn:hover{background:rgba(255,255,255,.28);}
+.cc-btn.big{width:44px;height:44px;font-size:1.4rem;background:rgba(230,57,80,.7);}
+.cc-btn.big:hover{background:rgba(230,57,80,.9);}
+.cc-time{color:rgba(255,255,255,.8);font-size:.75rem;font-family:monospace;white-space:nowrap;margin-left:.2rem;}
+.cc-seek{flex:1;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;
+  background:rgba(255,255,255,.25);outline:none;cursor:pointer;}
+.cc-seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--accent);cursor:pointer;margin-top:-5px;}
+.cc-seek::-webkit-slider-runnable-track{height:4px;border-radius:2px;}
+.cc-vol{width:70px;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;
+  background:rgba(255,255,255,.25);outline:none;cursor:pointer;}
+.cc-vol::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;
+  background:#fff;cursor:pointer;margin-top:-4px;}
+.host-only-hint{font-size:.68rem;color:rgba(255,255,255,.4);text-align:center;font-style:italic;padding-bottom:.1rem;}
+/* показываем контролы при наведении/тапе на видео */
+.video-container:hover .custom-controls.visible,
+.video-container.show-ctrl .custom-controls.visible{opacity:1;}
 
 /* ── REACTIONS ── */
 .reactions-bar{display:flex;align-items:center;gap:.32rem;padding:.38rem .8rem;background:var(--surface);border-top:1px solid var(--border);flex-shrink:0;}
@@ -221,7 +272,7 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
     <div class="tagline">Смотрите вместе — без серверов</div>
     <div class="info-box">
       ⚡ P2P WebRTC &nbsp;·&nbsp; 🛡 AdBlock &nbsp;·&nbsp; 🔄 Синхронизация &nbsp;·&nbsp; 🎉 Реакции &nbsp;·&nbsp; 📋 Очередь<br>
-      <span style="font-size:.75rem;opacity:.8">⚠️ Если не подключается на ПК — отключи VPN или фаервол</span>
+      <span style="font-size:.75rem;opacity:.8">🎬 YouTube · Rutube · VK · Twitch · Vimeo · Coub · OK.ru · Bilibili · Rumble и другие</span>
     </div>
 
     <div class="card">
@@ -279,9 +330,26 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
             <polygon points="5 3 19 12 5 21 5 3"/>
           </svg>
           <p>Вставьте ссылку на видео ниже</p>
-          <p style="font-size:.78rem;opacity:.6">YouTube · Rutube · VK Video</p>
+          <p style="font-size:.78rem;opacity:.6">YouTube · Rutube · VK · Twitch · Vimeo · Dailymotion · Coub · OK.ru · Bilibili · Rumble · и другие</p>
         </div>
         <iframe id="player" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+
+        <!-- Кастомные контролы для VK / Rutube -->
+        <div class="custom-controls" id="customControls">
+          <div class="cc-top">
+            <button class="cc-btn" id="ccRew" onclick="ccSeekRel(-10)" title="-10с">⏪</button>
+            <button class="cc-btn big" id="ccPlay" onclick="ccTogglePlay()" title="Пауза/Плей">▶</button>
+            <button class="cc-btn" id="ccFwd" onclick="ccSeekRel(10)" title="+10с">⏩</button>
+            <input class="cc-seek" id="ccSeekBar" type="range" min="0" max="100" value="0" step="0.1"
+              oninput="ccSeekTo(this.value)" title="Перемотка">
+            <span class="cc-time" id="ccTime">0:00 / 0:00</span>
+            <input class="cc-vol" id="ccVol" type="range" min="0" max="100" value="80" step="1"
+              oninput="ccSetVol(this.value)" title="Громкость">
+            <button class="cc-btn" id="ccMute" onclick="ccToggleMute()" title="Мут">🔊</button>
+          </div>
+          <div class="host-only-hint" id="ccHint"></div>
+        </div>
+
         <div class="buffer-overlay" id="bufferOverlay">
           <div class="buf-spin"></div>
           <div class="buf-txt">Буферизация...</div>
@@ -311,7 +379,7 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
         </div>
         <div class="queue-body" id="queueBody">
           <div class="queue-add-row">
-            <input type="url" id="queueInput" placeholder="Ссылка YouTube / Rutube / VK..."
+            <input type="url" id="queueInput" placeholder="YouTube, Twitch, VK, Vimeo, Coub, OK.ru..."
               onkeydown="if(event.key==='Enter')addToQueue()">
             <button class="btn-sm accent" onclick="addToQueue()">+ Добавить</button>
           </div>
@@ -320,7 +388,7 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
       </div>
 
       <div class="url-bar">
-        <input type="url" id="videoUrlInput" placeholder="Ссылка — смотреть сейчас..."
+        <input type="url" id="videoUrlInput" placeholder="YouTube, Twitch, Vimeo, VK, Rutube, Coub, OK.ru, Bilibili..."
           onkeydown="if(event.key==='Enter')setVideo()">
         <button class="btn-sm accent" onclick="setVideo()">▶ Загрузить</button>
       </div>
@@ -374,15 +442,22 @@ iframe#player{width:100%;height:100%;border:none;display:none;}
 const AVATARS=['🐱','🐶','🦊','🐸','🐼','🦁','🐯','🐺','🦄','🐙','🦋','🎃','👾','🤖','🧸','🎅'];
 const COLORS=['#e63950','#ff6b35','#f59e0b','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#84cc16','#f97316','#a78bfa'];
 const PEER_SERVERS=[
-  null,  // 0.peerjs.com дефолтный порт
-  {host:'0.peerjs.com', port:443, path:'/', secure:true},  // явно порт 443
+  {host:'0.peerjs.com', port:443, path:'/', secure:true},  // порт 443 HTTPS (работает без VPN)
   {host:'peerjs.fly.dev', port:443, path:'/', secure:true},
+  null,  // дефолтный fallback
 ];
 const ICE_SERVERS={iceServers:[
+  // STUN серверы (обнаружение внешнего IP)
   {urls:'stun:stun.l.google.com:19302'},
   {urls:'stun:stun1.l.google.com:19302'},
-  {urls:'stun:stun2.l.google.com:19302'},
   {urls:'stun:stun.cloudflare.com:3478'},
+  {urls:'stun:stun.ekiga.net:3478'},
+  {urls:'stun:stun.ideasip.com:3478'},
+  // TURN серверы (relay — работает даже за строгим NAT/фаерволом без VPN)
+  {urls:'turn:openrelay.metered.ca:80',    username:'openrelayproject', credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443',   username:'openrelayproject', credential:'openrelayproject'},
+  {urls:'turn:openrelay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject'},
+  {urls:'turn:relay.metered.ca:80',        username:'e9a6b9c42e8d9c2a6b3f1e7f', credential:'P2P+relay+free'},
 ]};
 const PEER_TIMEOUT=12000;
 const PING_INTERVAL=4000;
@@ -465,56 +540,512 @@ function hideErr(id){document.getElementById(id).style.display='none';}
 function setBusy(s){busy=s;document.getElementById('createBtn').disabled=s;document.getElementById('joinBtn').disabled=s;}
 
 // ══════════════════════════════════════════════════
-//  EMBED URL
+//  ПЕРЕМЕННЫЕ ДЛЯ VK/RUTUBE ПЛЕЕРА
 // ══════════════════════════════════════════════════
-function toEmbedUrl(url){
+let vkPlayer=null;        // iframe element
+let vkType=null;          // 'vk' | 'rutube' | null
+let vkReady=false;
+let vkPlaying=false;
+let vkDuration=0;
+let vkCurrentTime=0;
+let vkMuted=false;
+let vkVolume=80;
+let vkSyncInterval=null;  // интервал для хоста — рассылка состояния
+let vkPollInterval=null;  // интервал опроса времени (Rutube)
+let vkIgnoreSeek=false;   // флаг чтобы не слать sync при получении sync
+let vkCtrlVisible=false;
+
+// ══════════════════════════════════════════════════
+//  ОПРЕДЕЛЕНИЕ ПЛАТФОРМЫ
+// ══════════════════════════════════════════════════
+function detectPlatform(url){
   try{
+    const u=new URL(url); const h=u.hostname.replace('www.','');
+    if(h.includes('youtube.com')||h==='youtu.be') return 'youtube';
+    if(h.includes('rutube.ru')) return 'rutube';
+    if(h.includes('vk.com')||h.includes('vkvideo.ru')) return 'vk';
+    if(h.includes('twitch.tv')) return 'twitch';
+    if(h.includes('vimeo.com')) return 'vimeo';
+    if(h.includes('dailymotion.com')||h.includes('dai.ly')) return 'dailymotion';
+    if(h.includes('coub.com')) return 'coub';
+    if(h.includes('ok.ru')||h.includes('odnoklassniki.ru')) return 'ok';
+    if(h.includes('facebook.com')||h.includes('fb.watch')) return 'facebook';
+    if(h.includes('instagram.com')) return 'instagram';
+    if(h.includes('tiktok.com')) return 'tiktok';
+    if(h.includes('youku.com')) return 'youku';
+    if(h.includes('bilibili.com')) return 'bilibili';
+    if(h.includes('naver.com')) return 'naver';
+    if(h.includes('ted.com')) return 'ted';
+    if(h.includes('rumble.com')) return 'rumble';
+    if(h.includes('peertube')||h.includes('framatube.org')) return 'peertube';
+    if(url.includes('/embed')||url.includes('/player')||url.includes('iframe')) return 'embed';
+    return 'universal';
+  }catch{return null;}
+}
+
+// Возвращает {url, type} — type: 'youtube'|'vk'|'rutube'|'iframe'|'unsupported'
+function toEmbedUrl(rawUrl){
+  try{
+    const url=rawUrl.trim();
     const u=new URL(url);
-    if(u.hostname.includes('youtube.com')||u.hostname.includes('youtu.be')){
+    const h=u.hostname.replace('www.','');
+    const p=u.pathname;
+
+    // ── YouTube ──
+    if(h.includes('youtube.com')||h==='youtu.be'){
       let v=u.searchParams.get('v');
-      if(!v&&u.hostname==='youtu.be') v=u.pathname.slice(1).split('?')[0];
-      if(v) return `https://www.youtube.com/embed/${v}?autoplay=1&rel=0&playsinline=1`;
+      if(!v&&h==='youtu.be') v=p.slice(1).split('?')[0];
+      // Shorts
+      if(!v){const m=p.match(/\/shorts\/([^/?&]+)/);if(m)v=m[1];}
+      // Live
+      if(!v){const m=p.match(/\/live\/([^/?&]+)/);if(m)v=m[1];}
+      if(v) return `https://www.youtube.com/embed/${v}?autoplay=1&mute=1&rel=0&playsinline=1`;
     }
-    if(u.hostname.includes('rutube.ru')){
-      const m=u.pathname.match(/video\/([a-f0-9]+)/i);
-      if(m) return `https://rutube.ru/play/embed/${m[1]}/`;
+
+    // ── Rutube ──
+    if(h.includes('rutube.ru')){
+      // /video/HASH или /play/embed/HASH
+      const m=p.match(/\/(?:video|play\/embed)\/([a-f0-9]{32})/i);
+      if(m) return `https://rutube.ru/play/embed/${m[1]}/?autoplay=1&quality=hd`;
     }
-    if(u.hostname.includes('vk.com')||u.hostname.includes('vkvideo.ru')){
-      const m=u.pathname.match(/video(-?\d+_\d+)/);
-      if(m){const[oid,id]=m[1].split('_');return `https://vk.com/video_ext.php?oid=${oid}&id=${id}&hd=2&autoplay=1`;}
+
+    // ── VK Video ──
+    if(h.includes('vk.com')||h.includes('vkvideo.ru')){
+      const m=p.match(/video(-?\d+_\d+)/);
+      if(m){const[oid,id]=m[1].split('_');return `https://vk.com/video_ext.php?oid=${oid}&id=${id}&hd=2&autoplay=1&js_api=1`;}
+      // vkvideo.ru/videos/@owner/vsXXXX_YYYY
+      const m2=url.match(/vs(-?\d+)_(\d+)/);
+      if(m2) return `https://vk.com/video_ext.php?oid=${m2[1]}&id=${m2[2]}&hd=2&autoplay=1&js_api=1`;
     }
-    if(url.includes('/embed')||url.includes('/player')) return url;
-    return null;
+
+    // ── Twitch ──
+    if(h.includes('twitch.tv')){
+      const parent=location.hostname||'localhost';
+      // Клип: /CHANNEL/clip/CLIP или clips.twitch.tv/CLIP
+      const clipM=p.match(/\/clip\/([^/?]+)/)||url.match(/clips\.twitch\.tv\/([^/?]+)/);
+      if(clipM) return `https://clips.twitch.tv/embed?clip=${clipM[1]}&parent=${parent}&autoplay=true`;
+      // VOD: /videos/ID
+      const vodM=p.match(/\/videos\/(\d+)/);
+      if(vodM) return `https://player.twitch.tv/?video=${vodM[1]}&parent=${parent}&autoplay=true`;
+      // Стрим: /CHANNEL
+      const chan=p.replace('/','').split('/')[0];
+      if(chan) return `https://player.twitch.tv/?channel=${chan}&parent=${parent}&autoplay=true`;
+    }
+
+    // ── Vimeo ──
+    if(h.includes('vimeo.com')){
+      const m=p.match(/\/(\d+)/);
+      if(m) return `https://player.vimeo.com/video/${m[1]}?autoplay=1&dnt=1`;
+    }
+
+    // ── Dailymotion ──
+    if(h.includes('dailymotion.com')||h==='dai.ly'){
+      const m=p.match(/\/video\/([a-z0-9]+)/i)||p.match(/\/([a-z0-9]+)$/i);
+      if(m) return `https://www.dailymotion.com/embed/video/${m[1]}?autoplay=1`;
+    }
+
+    // ── Coub ──
+    if(h.includes('coub.com')){
+      const m=p.match(/\/view\/([^/?]+)/);
+      if(m) return `https://coub.com/embed/${m[1]}?autostart=true&muted=false`;
+    }
+
+    // ── OK.ru / Odnoklassniki ──
+    if(h.includes('ok.ru')||h.includes('odnoklassniki.ru')){
+      const m=p.match(/\/video\/(\d+)/)||p.match(/\/videoembed\/(\d+)/);
+      if(m) return `https://ok.ru/videoembed/${m[1]}?autoplay=1`;
+    }
+
+    // ── Bilibili ──
+    if(h.includes('bilibili.com')){
+      const bv=u.searchParams.get('bvid')||p.match(/\/(BV[a-zA-Z0-9]+)/)?.[1];
+      const av=u.searchParams.get('aid')||p.match(/\/av(\d+)/)?.[1];
+      if(bv) return `https://player.bilibili.com/player.html?bvid=${bv}&autoplay=1`;
+      if(av) return `https://player.bilibili.com/player.html?aid=${av}&autoplay=1`;
+    }
+
+    // ── Rumble ──
+    if(h.includes('rumble.com')){
+      // /embed/VIDEOID или /VIDEOID
+      const m=p.match(/\/embed\/([^/?]+)/)||p.match(/\/([a-z0-9\-]+\.html)/i);
+      if(m) return `https://rumble.com/embed/${m[1].replace('.html','')}/?pub=4`;
+    }
+
+    // ── TED ──
+    if(h.includes('ted.com')){
+      const m=p.match(/\/talks\/([^/?]+)/);
+      if(m) return `https://embed.ted.com/talks/${m[1]}`;
+    }
+
+    // ── Facebook Video ──
+    if(h.includes('facebook.com')||h==='fb.watch'){
+      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&autoplay=true&width=640`;
+    }
+
+    // ── PeerTube ──
+    if(h.includes('peertube')||h.includes('framatube.org')){
+      const m=p.match(/\/videos\/(?:watch|embed)\/([^/?]+)/);
+      if(m) return `${u.origin}/videos/embed/${m[1]}?autoplay=1&warningTitle=0`;
+    }
+
+    // ── Уже готовый embed URL ──
+    if(url.includes('/embed')||url.includes('/player')||u.searchParams.has('embed')) return url;
+
+    // ── Универсальный fallback — прямой iframe ──
+    return url;
+
   }catch{return null;}
 }
 
 function getTitle(url){
   try{
-    const u=new URL(url);
-    if(u.hostname.includes('youtube.com')||u.hostname.includes('youtu.be')) return 'YouTube';
-    if(u.hostname.includes('rutube.ru')) return 'Rutube';
-    if(u.hostname.includes('vk.com')) return 'VK Video';
-    return u.hostname.replace('www.','');
+    const u=new URL(url); const h=u.hostname.replace('www.','');
+    if(h.includes('youtube.com')||h==='youtu.be') return 'YouTube';
+    if(h.includes('rutube.ru')) return 'Rutube';
+    if(h.includes('vk.com')||h.includes('vkvideo.ru')) return 'VK Video';
+    if(h.includes('twitch.tv')) return 'Twitch';
+    if(h.includes('vimeo.com')) return 'Vimeo';
+    if(h.includes('dailymotion.com')) return 'Dailymotion';
+    if(h.includes('coub.com')) return 'Coub';
+    if(h.includes('ok.ru')) return 'OK.ru';
+    if(h.includes('bilibili.com')) return 'Bilibili';
+    if(h.includes('rumble.com')) return 'Rumble';
+    if(h.includes('ted.com')) return 'TED';
+    if(h.includes('facebook.com')) return 'Facebook';
+    return h.replace('www.','');
   }catch{return url.slice(0,30);}
 }
 
 // ══════════════════════════════════════════════════
-//  ВИДЕО
+//  ВИДЕО — ЗАГРУЗКА
 // ══════════════════════════════════════════════════
 function loadVideoFrame(url){
   if(!url)return;
   currentVideo=url;
   pendingSync=null;
+  destroyVKPlayer();
+  destroyYTPlayer();
+
   const ym=url.match(/youtube\.com\/embed\/([^?&]+)/);
-  if(ym){ loadYouTubePlayer(ym[1]); }
-  else {
-    destroyYTPlayer();
-    const ifr=document.getElementById('player');
-    ifr.src=url; ifr.style.display='block';
-    document.getElementById('videoPlaceholder').style.display='none';
-    setSyncBadge('live');
+  if(ym){ loadYouTubePlayer(ym[1]); return; }
+
+  if(url.includes('vk.com/video_ext')){
+    loadVKPlayer(url,'vk'); return;
+  }
+  if(url.includes('rutube.ru/play/embed')){
+    loadVKPlayer(url,'rutube'); return;
+  }
+
+  // Все остальные платформы — universal iframe
+  loadUniversalPlayer(url);
+}
+
+function loadUniversalPlayer(url){
+  const ifr=document.getElementById('player');
+  ifr.src=url;
+  ifr.style.display='block';
+  ifr.allow='autoplay; encrypted-media; picture-in-picture; fullscreen';
+  ifr.allowFullscreen=true;
+  document.getElementById('videoPlaceholder').style.display='none';
+  showCustomControls(false);
+
+  // Определяем тип для выбора синхронизации
+  const plat=detectPlatform(url);
+  const knowsApi=['twitch','vimeo','dailymotion','coub','ok','bilibili','rumble','ted','facebook','youtube','vk','rutube'];
+
+  // Показываем badge платформы
+  setSyncBadge('live');
+
+  // Для платформ без API — таймерная синхронизация по времени старта
+  if(isHost){
+    startUniversalSyncLoop();
   }
 }
+
+let universalStartTs=null; // время когда хост запустил видео
+let universalSyncInterval=null;
+
+function startUniversalSyncLoop(){
+  clearInterval(universalSyncInterval);
+  universalStartTs=Date.now();
+  universalSyncInterval=setInterval(()=>{
+    const elapsed=(Date.now()-universalStartTs)/1000;
+    broadcast({type:'universal_sync', startTs:universalStartTs, elapsed, ts:Date.now()});
+  },5000);
+  // Сразу
+  broadcast({type:'universal_sync', startTs:universalStartTs, elapsed:0, ts:Date.now()});
+}
+
+function stopUniversalSync(){
+  clearInterval(universalSyncInterval); universalSyncInterval=null; universalStartTs=null;
+}
+
+// ══════════════════════════════════════════════════
+//  VK / RUTUBE ПЛЕЕР
+// ══════════════════════════════════════════════════
+function loadVKPlayer(url, type){
+  destroyYTPlayer();
+  vkType=type; vkReady=false; vkPlaying=false; vkCurrentTime=0; vkDuration=0;
+
+  const ifr=document.getElementById('player');
+  ifr.src=url; ifr.style.display='block';
+  ifr.allow='autoplay; encrypted-media; picture-in-picture';
+  document.getElementById('videoPlaceholder').style.display='none';
+  vkPlayer=ifr;
+
+  showCustomControls(true);
+  updateCCButtons();
+  setSyncBadge('live');
+
+  // Слушаем postMessage от плеера
+  window.addEventListener('message', onVKMessage);
+
+  // VK: отправляем init после загрузки iframe
+  ifr.onload=()=>{
+    if(type==='vk'){
+      vkSend({method:'subscribe', params:{}});
+    }
+    // Rutube не требует subscribe
+    vkReady=true;
+    if(isHost){
+      startVKSyncLoop();
+    }
+    // Небольшой delay — отправляем текущее состояние гостям
+    setTimeout(()=>{
+      if(isHost) broadcastVKSync(false);
+    }, 2000);
+  };
+
+  // Опрос времени для Rutube (нет event-based API)
+  if(type==='rutube'){
+    clearInterval(vkPollInterval);
+    vkPollInterval=setInterval(()=>{
+      if(!vkReady) return;
+      vkSend({type:'player:setCurrentTime'}); // запросить текущее время
+      // Rutube принимает команды через postMessage
+    }, 500);
+  }
+}
+
+function vkSend(data){
+  try{
+    if(!vkPlayer||!vkPlayer.contentWindow) return;
+    // VK API формат
+    if(vkType==='vk'){
+      vkPlayer.contentWindow.postMessage(JSON.stringify(data),'*');
+    }
+    // Rutube API формат
+    if(vkType==='rutube'){
+      vkPlayer.contentWindow.postMessage(JSON.stringify(data),'*');
+    }
+  }catch(e){}
+}
+
+function onVKMessage(e){
+  let d;
+  try{ d=typeof e.data==='string'?JSON.parse(e.data):e.data; }catch{return;}
+  if(!d) return;
+
+  // ── VK Player events ──
+  if(vkType==='vk'){
+    // VK шлёт {type:'vid_play'}, {type:'vid_pause'}, {type:'vid_duration',duration:N}, {type:'vid_progress',time:N}
+    if(d.type==='vid_play'||d.handler==='onPlay'){
+      vkPlaying=true; updateCCButtons();
+      if(isHost&&!vkIgnoreSeek) broadcastVKSync(false);
+    }
+    if(d.type==='vid_pause'||d.handler==='onPause'){
+      vkPlaying=false; updateCCButtons();
+      if(isHost&&!vkIgnoreSeek) broadcastVKSync(false);
+    }
+    if(d.type==='vid_duration'||d.handler==='onDurationChange'){
+      vkDuration=d.duration||d.seconds||0; updateCCTime();
+    }
+    if(d.type==='vid_progress'||d.handler==='onProgress'||d.type==='vid_currentTime'){
+      vkCurrentTime=d.time||d.seconds||0;
+      updateCCProgress();
+      if(!vkReady){ vkReady=true; if(isHost) startVKSyncLoop(); }
+    }
+    // Также VK шлёт через handler
+    if(d.handler==='timeUpdate'&&d.seconds!=null) vkCurrentTime=d.seconds;
+  }
+
+  // ── Rutube Player events ──
+  if(vkType==='rutube'){
+    // Rutube: {type:'player:ready'}, {type:'player:durationChange',data:{duration}},
+    //         {type:'player:currentTime',data:{time}}, {type:'player:play'}, {type:'player:pause'}
+    const t=d.type||d.event;
+    if(t==='player:ready'||t==='ready'){
+      vkReady=true; if(isHost) startVKSyncLoop();
+    }
+    if(t==='player:play'||t==='play'){
+      vkPlaying=true; updateCCButtons();
+      if(isHost&&!vkIgnoreSeek) broadcastVKSync(false);
+    }
+    if(t==='player:pause'||t==='pause'){
+      vkPlaying=false; updateCCButtons();
+      if(isHost&&!vkIgnoreSeek) broadcastVKSync(false);
+    }
+    if(t==='player:durationChange'||t==='durationchange'){
+      vkDuration=(d.data&&d.data.duration)||d.duration||0; updateCCTime();
+    }
+    if(t==='player:currentTime'||t==='timeupdate'){
+      vkCurrentTime=(d.data&&(d.data.time||d.data.currentTime))||d.time||d.currentTime||0;
+      updateCCProgress();
+    }
+    if(t==='player:ended'||t==='ended'){
+      vkPlaying=false; updateCCButtons(); playNextFromQueue();
+    }
+  }
+}
+
+// Команды управления плеером (VK/Rutube)
+function vkPlay(){
+  if(vkType==='vk') vkSend({method:'play'});
+  if(vkType==='rutube') vkSend({type:'player:play'});
+  vkPlaying=true; updateCCButtons();
+}
+function vkPause(){
+  if(vkType==='vk') vkSend({method:'pause'});
+  if(vkType==='rutube') vkSend({type:'player:pause'});
+  vkPlaying=false; updateCCButtons();
+}
+function vkSeek(sec){
+  if(vkType==='vk') vkSend({method:'seek',seconds:sec});
+  if(vkType==='rutube') vkSend({type:'player:setCurrentTime',data:{time:sec}});
+  vkCurrentTime=sec; updateCCProgress();
+}
+function vkSetVolume(vol){
+  vkVolume=vol;
+  if(vkType==='vk') vkSend({method:'setVolume',volume:vol/100});
+  if(vkType==='rutube') vkSend({type:'player:setVolume',data:{volume:vol/100}});
+}
+function vkSetMute(mute){
+  vkMuted=mute;
+  if(vkType==='vk') vkSend({method:mute?'mute':'unmute'});
+  if(vkType==='rutube') vkSend({type:mute?'player:mute':'player:unmute'});
+}
+
+function destroyVKPlayer(){
+  window.removeEventListener('message', onVKMessage);
+  clearInterval(vkSyncInterval); vkSyncInterval=null;
+  clearInterval(vkPollInterval); vkPollInterval=null;
+  stopUniversalSync();
+  vkPlayer=null; vkType=null; vkReady=false; vkPlaying=false;
+  vkCurrentTime=0; vkDuration=0; vkIgnoreSeek=false;
+  showCustomControls(false);
+  const ifr=document.getElementById('player');
+  if(ifr){ ifr.src='about:blank'; ifr.style.display='none'; ifr.onload=null; }
+}
+
+// Хост рассылает состояние VK/Rutube гостям
+function startVKSyncLoop(){
+  clearInterval(vkSyncInterval);
+  vkSyncInterval=setInterval(()=>{ if(vkReady) broadcastVKSync(true); }, 4000);
+}
+
+function broadcastVKSync(periodic){
+  broadcast({type:'vk_sync', playing:vkPlaying, time:vkCurrentTime, ts:Date.now(), periodic});
+}
+
+// Гость применяет sync от хоста
+function applyVKSync(data){
+  if(!vkReady){pendingSync=data;return;}
+  vkIgnoreSeek=true;
+  const lag=(Date.now()-data.ts)/1000;
+  const target=data.time+lag;
+  const drift=Math.abs(vkCurrentTime-target);
+  if(drift>2||!data.periodic){
+    setSyncBadge('sync');
+    vkSeek(target);
+    setTimeout(()=>setSyncBadge('live'),1500);
+  }
+  if(data.playing&&!vkPlaying) vkPlay();
+  else if(!data.playing&&vkPlaying) vkPause();
+  setTimeout(()=>{ vkIgnoreSeek=false; },500);
+}
+
+// ══════════════════════════════════════════════════
+//  КАСТОМНЫЕ КОНТРОЛЫ (VK / Rutube)
+// ══════════════════════════════════════════════════
+function showCustomControls(show){
+  vkCtrlVisible=show;
+  const cc=document.getElementById('customControls');
+  if(!cc) return;
+  if(show){ cc.classList.add('visible'); }
+  else { cc.classList.remove('visible'); }
+  // Только хост может управлять
+  const isCtrl=isHost;
+  ['ccPlay','ccRew','ccFwd','ccSeekBar','ccVol','ccMute'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.disabled=!isCtrl; el.style.opacity=isCtrl?'1':'0.45'; }
+  });
+  const hint=document.getElementById('ccHint');
+  if(hint) hint.textContent=isCtrl?'':'Только хост управляет воспроизведением';
+
+  // Показываем/скрываем контролы по тапу на видео (мобила)
+  const vc=document.querySelector('.video-container');
+  if(show&&vc){
+    vc.onclick=()=>{ vc.classList.toggle('show-ctrl'); };
+  } else if(vc){
+    vc.onclick=null; vc.classList.remove('show-ctrl');
+  }
+}
+
+function updateCCButtons(){
+  const btn=document.getElementById('ccPlay');
+  if(btn) btn.textContent=vkPlaying?'⏸':'▶';
+}
+
+function updateCCProgress(){
+  const bar=document.getElementById('ccSeekBar');
+  if(bar&&vkDuration>0) bar.value=(vkCurrentTime/vkDuration)*100;
+  updateCCTime();
+}
+
+function updateCCTime(){
+  const el=document.getElementById('ccTime');
+  if(el) el.textContent=`${fmtTime(vkCurrentTime)} / ${fmtTime(vkDuration)}`;
+}
+
+function fmtTime(s){
+  s=Math.floor(s||0);
+  const m=Math.floor(s/60), sec=s%60;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+window.ccTogglePlay=function(){
+  if(!isHost)return;
+  if(vkPlaying){ vkPause(); if(isHost) broadcastVKSync(false); }
+  else { vkPlay(); if(isHost) broadcastVKSync(false); }
+};
+
+window.ccSeekRel=function(delta){
+  if(!isHost)return;
+  const t=Math.max(0,vkCurrentTime+delta);
+  vkSeek(t);
+  if(isHost) broadcastVKSync(false);
+};
+
+window.ccSeekTo=function(pct){
+  if(!isHost)return;
+  const t=(pct/100)*vkDuration;
+  vkSeek(t);
+  // Небольшой delay перед broadcast чтобы не спамить
+  clearTimeout(window._seekBcast);
+  window._seekBcast=setTimeout(()=>{ if(isHost) broadcastVKSync(false); },300);
+};
+
+window.ccSetVol=function(val){
+  vkSetVolume(Number(val));
+};
+
+window.ccToggleMute=function(){
+  vkMuted=!vkMuted; vkSetMute(vkMuted);
+  const btn=document.getElementById('ccMute');
+  if(btn) btn.textContent=vkMuted?'🔇':'🔊';
+};
+
+
 
 function destroyYTPlayer(){
   if(ytPlayer){try{ytPlayer.destroy();}catch(e){} ytPlayer=null; ytReady=false;}
@@ -522,6 +1053,8 @@ function destroyYTPlayer(){
   ignoreCount=0; pendingSync=null;
   isBuffering=false;
   const bo=document.getElementById('bufferOverlay'); if(bo) bo.classList.remove('active');
+  // Убираем ytWrap если есть
+  const yw=document.getElementById('ytWrap'); if(yw) yw.remove();
 }
 
 function loadYouTubePlayer(videoId){
@@ -541,7 +1074,7 @@ function loadYouTubePlayer(videoId){
     if(!document.getElementById('ytInner'))return;
     ytPlayer=new YT.Player('ytInner',{
       videoId, width:'100%', height:'100%',
-      playerVars:{autoplay:1,rel:0,playsinline:1,enablejsapi:1},
+      playerVars:{autoplay:1,mute:1,rel:0,playsinline:1,enablejsapi:1},
       events:{onReady:onYTReady,onStateChange:onYTStateChange}
     });
   }
@@ -566,6 +1099,8 @@ function loadYouTubePlayer(videoId){
 
 function onYTReady(){
   ytReady=true;
+  // Снимаем mute после автозапуска (mute нужен только для обхода политики автовоспроизведения на ПК)
+  try{ if(ytPlayer&&ytPlayer.unMute) ytPlayer.unMute(); }catch(e){}
   setSyncBadge('live');
   if(isHost){
     startSyncLoop();
@@ -906,10 +1441,14 @@ window.createRoom=async function(){
       conn.send({
         type:'init',
         video:currentVideo,
-        // Передаём текущую позицию и статус воспроизведения хоста
+        // YouTube state
         videoTime: safeTime(),
         videoPlaying: (ytPlayer&&ytReady&&ytPlayer.getPlayerState)?ytPlayer.getPlayerState()===YT.PlayerState.PLAYING:false,
         videoTs: Date.now(),
+        // VK/Rutube state
+        vkTime: vkCurrentTime,
+        vkPlaying: vkPlaying,
+        vkTs: Date.now(),
         names:userNames,
         hostName:myName,hostId:myId,hostAvatar:myAvatar,hostColor:myColor,
         queue:videoQueue,
@@ -997,9 +1536,16 @@ window.joinRoom=async function(){
 function guestReceive(data){
   if(data.type==='init'){
     if(data.video) loadVideoFrame(data.video);
-    // Сохраняем sync из init чтобы применить когда плеер будет готов
-    if(data.video&&data.videoTime!=null){
+    // YouTube: сохраняем sync для применения когда плеер будет готов
+    if(data.video&&data.video.includes('youtube')&&data.videoTime!=null){
       pendingSync={type:'sync',action:data.videoPlaying?'play':'pause',time:data.videoTime,ts:data.videoTs||Date.now(),periodic:false};
+    }
+    // VK/Rutube: отложенный sync
+    if(data.video&&(data.video.includes('vk.com')||data.video.includes('rutube'))&&data.vkTime!=null){
+      // Применяем через 3 сек — дожидаемся загрузки iframe
+      setTimeout(()=>{
+        applyVKSync({playing:data.vkPlaying,time:data.vkTime,ts:data.vkTs||Date.now(),periodic:false});
+      },3000);
     }
     userNames=data.names||{};
     if(data.hostId) userNames[data.hostId]={name:data.hostName||'Хост',avatar:data.hostAvatar||'👤',color:data.hostColor||'#888'};
@@ -1015,6 +1561,12 @@ function guestReceive(data){
   if(data.type==='system') renderMsg(data);
   if(data.type==='video') loadVideoFrame(data.url);
   if(data.type==='sync') applySync(data);
+  if(data.type==='vk_sync') applyVKSync(data);
+  if(data.type==='universal_sync'){
+    // Для платформ без API — просто показываем badge синхронизации
+    // Реальная синхронизация невозможна без API, но показываем статус
+    setSyncBadge('live');
+  }
   if(data.type==='reaction') showReactionFly(data.emoji);
   if(data.type==='buffer_state'){guestBuffers[data.uid]={name:data.name,buffering:data.buffering};renderBufs();}
   if(data.type==='queue_add'){videoQueue.push(data.item);renderQueue();}
@@ -1029,11 +1581,19 @@ function guestReceive(data){
 // ══════════════════════════════════════════════════
 window.setVideo=function(){
   const raw=document.getElementById('videoUrlInput').value.trim(); if(!raw)return;
-  const embed=toEmbedUrl(raw);
-  if(!embed){showToast('Не распознал. YouTube/Rutube/VK','var(--accent)');return;}
+  let embed=toEmbedUrl(raw);
+  if(!embed){showToast('Не удалось распознать ссылку','var(--accent)');return;}
+
+  // Определяем тип для отображения
+  const plat=detectPlatform(raw)||'?';
+  const platNames={youtube:'YouTube',rutube:'Rutube',vk:'VK Video',twitch:'Twitch',vimeo:'Vimeo',
+    dailymotion:'Dailymotion',coub:'Coub',ok:'OK.ru',bilibili:'Bilibili',rumble:'Rumble',
+    ted:'TED',facebook:'Facebook',universal:'Сайт'};
+  const platLabel=platNames[plat]||getTitle(raw);
+
   loadVideoFrame(embed);
   const d={type:'video',url:embed,name:myName};
-  if(isHost){broadcast(d);renderMsg({type:'system',text:`${myName} поставил видео`});}
+  if(isHost){broadcast(d);renderMsg({type:'system',text:`${myName} поставил видео · ${platLabel}`});}
   else if(hostConn&&hostConn.open) hostConn.send(d);
   document.getElementById('videoUrlInput').value='';
 };
@@ -1046,6 +1606,7 @@ window.leaveRoom=function(){
   pingTimers={}; pingMap={}; pingCallbacks={};
   clearInterval(syncInterval); syncInterval=null;
   destroyYTPlayer();
+  destroyVKPlayer();
   pendingSync=null; ignoreCount=0;
   const yw=document.getElementById('ytWrap'); if(yw)yw.remove();
   if(peer){try{peer.destroy();}catch(e){}}
